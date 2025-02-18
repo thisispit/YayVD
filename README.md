@@ -28,6 +28,9 @@ A minimal, modern web interface for downloading YouTube videos built with Flask 
 
 ```bash
 git clone https://github.com/yourusername/youtube-downloader.git
+```
+
+```bash
 cd youtube-downloader
 ```
 
