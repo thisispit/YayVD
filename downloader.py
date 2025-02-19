@@ -8,7 +8,7 @@ app = Flask(__name__)
 def index():
     if request.method == 'POST':
         video_url = request.form['video_url']
-        selected_format = request.form.get('format', 'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4] / bv*+ba/b')
+        selected_format = request.form.get('format', '(bestvideo+bestaudio/best)[ext=mp4]')
         
         try:
             # Validate URL
@@ -25,7 +25,20 @@ def index():
                 'outtmpl': os.path.join(download_path, '%(title)s.%(ext)s'),
                 'quiet': True,
                 'no_warnings': True,
-                'merge_output_format': 'mp4'
+                'merge_output_format': 'mp4',
+                'format_sort': ['res', 'ext:mp4:m4a', 'tbr', 'id'],
+                'format_sort_force': True,
+                'postprocessors': [{
+                    'key': 'FFmpegVideoConvertor',
+                    'preferedformat': 'mp4',
+                }],
+                # Updated FFmpeg options
+                'keepvideo': True,
+                'postprocessor_args': [
+                    '-c:v', 'copy',
+                    '-c:a', 'aac',
+                    '-b:a', '192k'
+                ],
             }
 
             # Download the video
@@ -82,60 +95,52 @@ def get_formats():
             info = ydl.extract_info(video_url, download=False)
             formats = []
             
+            # Add best quality option at the top
+            formats.append({
+                'format_id': '(bestvideo+bestaudio/best)[ext=mp4]',
+                'text': '🔥 Maximum Quality',
+                'height': 9999
+            })
+
             # Get video formats
+            video_formats = []
             for f in info['formats']:
-                # Only include formats that have both video and audio, or are video only with specific qualities
-                if f.get('height') and f.get('ext') in ['mp4', 'webm']:
-                    format_id = f['format_id']
-                    height = f.get('height')
-                    ext = f.get('ext')
-                    vcodec = f.get('vcodec', '')
-                    acodec = f.get('acodec', '')
-                    filesize = f.get('filesize', 0)
+                if f.get('vcodec') != 'none' and f.get('height'):
+                    video_formats.append(f)
+
+            # Sort by height and add to formats list
+            seen_heights = set()
+            for fmt in sorted(video_formats, key=lambda x: (x.get('height', 0), x.get('tbr', 0)), reverse=True):
+                height = fmt.get('height', 0)
+                if height not in seen_heights:
+                    seen_heights.add(height)
                     
-                    # Skip formats without video
-                    if vcodec == 'none':
-                        continue
-                        
-                    # Convert filesize to MB
-                    filesize_mb = round(filesize / (1024 * 1024), 1) if filesize else 0
+                    # Create format string that ensures we get this exact height with best audio
+                    format_id = f"(bestvideo[height={height}]+bestaudio/best[height={height}])[ext=mp4]"
                     
-                    # Create format description
+                    # Create quality label
                     quality_label = f"{height}p"
-                    if height >= 1080:
-                        quality_label += " HD"
+                    if height >= 2160:
+                        quality_label += " 4K"
+                    elif height >= 1440:
+                        quality_label += " 2K"
+                    elif height >= 1080:
+                        quality_label += " FHD"
                     elif height >= 720:
                         quality_label += " HD"
                     
-                    has_audio = acodec != 'none'
-                    format_text = f"{quality_label} ({ext})"
-                    if filesize_mb > 0:
-                        format_text += f" - {filesize_mb}MB"
+                    # Add bitrate if available
+                    tbr = fmt.get('tbr', 0)
+                    if tbr > 0:
+                        quality_label += f" ({round(tbr/1000, 1)}Mbps)"
                     
                     formats.append({
-                        'format_id': f"{format_id}+ba/b" if not has_audio else format_id,
-                        'text': format_text,
-                        'height': height,
-                        'has_audio': has_audio
+                        'format_id': format_id,
+                        'text': quality_label,
+                        'height': height
                     })
             
-            # Remove duplicates and sort by height
-            unique_formats = []
-            seen_heights = set()
-            
-            # Add a "Best quality" option
-            unique_formats.append({
-                'format_id': 'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]',
-                'text': 'Best Quality (MP4)',
-                'height': 9999  # This ensures it appears at the top
-            })
-            
-            for f in sorted(formats, key=lambda x: x['height'], reverse=True):
-                if f['height'] not in seen_heights:
-                    unique_formats.append(f)
-                    seen_heights.add(f['height'])
-            
-            return jsonify({'formats': unique_formats})
+            return jsonify({'formats': formats})
             
     except Exception as e:
         return jsonify({'error': str(e)}), 400
