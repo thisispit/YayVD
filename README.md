@@ -81,3 +81,39 @@ python downloader.py
 ```
 http://127.0.0.1:5000
 ```
+
+## Free Hosting Options
+
+### 1. Render
+1. Create account on [Render](https://render.com)
+2. Create new Web Service
+3. Connect your GitHub repository
+4. Set build command: `pip install -r requirements.txt`
+5. Set start command: `gunicorn downloader:app`
+6. Deploy
+
+### 2. Pythonanywhere
+1. Create account on [PythonAnywhere](https://www.pythonanywhere.com)
+2. Go to Web tab
+3. Create new web app
+4. Choose Flask
+5. Clone your repository
+6. Set WSGI configuration file:
+```python
+from downloader import app as application
+```
+7. Install requirements using bash console:
+```bash
+pip3 install --user -r requirements.txt
+```
+8. Reload web app
+
+### 3. Railway
+1. Create account on [Railway](https://railway.app)
+2. Create new project
+3. Deploy from GitHub repository
+4. Add Python template
+5. Set start command: `gunicorn downloader:app`
+6. Deploy
+
+Note: Some free hosts might have limitations on file size or processing time. Choose based on your needs.

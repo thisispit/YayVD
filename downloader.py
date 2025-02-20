@@ -7,11 +7,13 @@ from typing import Dict, Any
 from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor
 import asyncio
+import tempfile
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
 
 # Configuration
-DOWNLOAD_PATH = "temp_downloads"
+DOWNLOAD_PATH = os.path.join(tempfile.gettempdir(), "yayvd_downloads")
 ALLOWED_DOMAINS = ('youtube.com', 'youtu.be')
 DEFAULT_FORMAT = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]'
 
@@ -201,5 +203,8 @@ def index():
 
     return render_template('index.html')
 
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
