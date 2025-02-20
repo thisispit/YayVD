@@ -1,61 +1,179 @@
-from flask import Flask, render_template, request, send_file, jsonify
+from flask import Flask, render_template, request, send_file, jsonify, Response
 import yt_dlp
 import os
+import json
+import shutil
+from typing import Dict, Any
+from functools import lru_cache
+from concurrent.futures import ThreadPoolExecutor
+import asyncio
 
 app = Flask(__name__)
+
+# Configuration
+DOWNLOAD_PATH = "temp_downloads"
+ALLOWED_DOMAINS = ('youtube.com', 'youtu.be')
+DEFAULT_FORMAT = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]'
+
+# Global state
+download_status = {'state': 'idle'}
+
+class VideoDownloader:
+    def __init__(self, url: str, format_id: str):
+        self.url = url
+        self.format_id = format_id
+        self.filename = ""
+        self._executor = ThreadPoolExecutor(max_workers=2)
+        
+    @lru_cache(maxsize=32)
+    def get_formats(self) -> list:
+        """Extract available video formats with caching."""
+        try:
+            with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
+                info = ydl.extract_info(self.url, download=False)
+                return self._process_formats(info)
+        except Exception as e:
+            raise ValueError(f"Error fetching video formats: {str(e)}")
+
+    def _process_formats(self, info: Dict[str, Any]) -> list:
+        """Process and filter video formats with improved efficiency."""
+        formats = [{
+            'format_id': DEFAULT_FORMAT,
+            'text': '🔥 Maximum Quality',
+            'height': 9999,
+            'filesize': self._get_format_size(info, DEFAULT_FORMAT)
+        }]
+        
+        # Filter and sort formats in one pass
+        video_formats = sorted(
+            (f for f in info['formats'] 
+             if f.get('vcodec') != 'none' and f.get('height')),
+            key=lambda x: (x.get('height', 0), x.get('tbr', 0)),
+            reverse=True
+        )
+        
+        seen_heights = set()
+        return formats + [
+            self._create_format_option(fmt, fmt['height'], info)
+            for fmt in video_formats
+            if fmt['height'] not in seen_heights 
+            and not seen_heights.add(fmt['height'])
+        ]
+
+    @lru_cache(maxsize=64)
+    def _get_format_size(self, info: Dict[str, Any], format_id: str) -> str:
+        """Calculate and format the file size with caching."""
+        try:
+            with yt_dlp.YoutubeDL({
+                'format': format_id,
+                'quiet': True,
+                'no_warnings': True
+            }) as ydl:
+                format_info = ydl.extract_info(self.url, download=False)
+                filesize = format_info.get('filesize') or format_info.get('filesize_approx', 0)
+                
+                if not filesize:
+                    return ""
+                    
+                # Use integer division for faster computation
+                if filesize < 1048576:  # 1024 * 1024
+                    return f"{filesize // 1024:.1f}KB"
+                elif filesize < 1073741824:  # 1024 * 1024 * 1024
+                    return f"{filesize // 1048576:.1f}MB"
+                return f"{filesize // 1073741824:.1f}GB"
+        except:
+            return ""
+
+    def download(self) -> str:
+        """Download the video and return the filename."""
+        try:
+            self._ensure_download_directory()
+            
+            ydl_opts = self._get_download_options()
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(self.url, download=True)
+                self.filename = ydl.prepare_filename(info)
+                
+                if not self.filename.endswith('.mp4'):
+                    self.filename = f"{os.path.splitext(self.filename)[0]}.mp4"
+                
+                if not os.path.exists(self.filename):
+                    raise ValueError("Download failed")
+                
+                return self.filename
+                
+        except Exception as e:
+            self._cleanup()
+            raise ValueError(f"Download error: {str(e)}")
+
+    def _get_download_options(self) -> Dict[str, Any]:
+        """Get yt-dlp download options."""
+        return {
+            'format': self.format_id,
+            'outtmpl': os.path.join(DOWNLOAD_PATH, '%(title)s.%(ext)s'),
+            'quiet': True,
+            'no_warnings': True,
+            'merge_output_format': 'mp4',
+            'progress_hooks': [self._progress_hook],
+            'format_sort': ['res', 'ext:mp4:m4a', 'tbr', 'id'],
+            'format_sort_force': True,
+        }
+
+    def _progress_hook(self, d: Dict[str, Any]) -> None:
+        """Update download status."""
+        global download_status
+        if d['status'] == 'downloading':
+            download_status['state'] = 'downloading'
+        elif d['status'] == 'finished':
+            download_status['state'] = 'processing'
+
+    @staticmethod
+    def _ensure_download_directory() -> None:
+        """Ensure clean download directory exists."""
+        if os.path.exists(DOWNLOAD_PATH):
+            shutil.rmtree(DOWNLOAD_PATH)
+        os.makedirs(DOWNLOAD_PATH)
+
+    @staticmethod
+    def _cleanup() -> None:
+        """Clean up download directory."""
+        if os.path.exists(DOWNLOAD_PATH):
+            shutil.rmtree(DOWNLOAD_PATH)
+
+def is_valid_url(url: str) -> bool:
+    """Validate YouTube URL."""
+    return any(domain in url for domain in ALLOWED_DOMAINS)
+
+@app.route('/get-formats', methods=['POST'])
+async def get_formats():
+    try:
+        url = request.form.get('video_url')
+        if not is_valid_url(url):
+            raise ValueError('Invalid YouTube URL')
+            
+        downloader = VideoDownloader(url, DEFAULT_FORMAT)
+        formats = await asyncio.to_thread(downloader.get_formats)
+        return jsonify({'formats': formats})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/check-status')
+def check_status():
+    return jsonify(download_status)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
-        video_url = request.form['video_url']
-        selected_format = request.form.get('format', '(bestvideo+bestaudio/best)[ext=mp4]')
-        
         try:
-            # Validate URL
-            if not video_url.startswith(('https://www.youtube.com/', 'https://youtu.be/')):
+            url = request.form['video_url']
+            format_id = request.form.get('format', DEFAULT_FORMAT)
+            
+            if not is_valid_url(url):
                 raise ValueError('Invalid YouTube URL')
 
-            # Create download directory if it doesn't exist
-            download_path = "temp_downloads"
-            os.makedirs(download_path, exist_ok=True)
-
-            # Configure yt-dlp options
-            ydl_opts = {
-                'format': selected_format,
-                'outtmpl': os.path.join(download_path, '%(title)s.%(ext)s'),
-                'quiet': True,
-                'no_warnings': True,
-                'merge_output_format': 'mp4',
-                'format_sort': ['res', 'ext:mp4:m4a', 'tbr', 'id'],
-                'format_sort_force': True,
-                'postprocessors': [{
-                    'key': 'FFmpegVideoConvertor',
-                    'preferedformat': 'mp4',
-                }],
-                # Updated FFmpeg options
-                'keepvideo': True,
-                'postprocessor_args': [
-                    '-c:v', 'copy',
-                    '-c:a', 'aac',
-                    '-b:a', '192k'
-                ],
-            }
-
-            # Download the video
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(video_url, download=True)
-                filename = ydl.prepare_filename(info)
-                
-                # Ensure the filename ends with .mp4
-                if not filename.endswith('.mp4'):
-                    base = os.path.splitext(filename)[0]
-                    filename = base + '.mp4'
-
-            # Verify the file was downloaded
-            if not os.path.exists(filename):
-                raise ValueError("Download failed")
-
-            # Send file and then clean up
+            downloader = VideoDownloader(url, format_id)
+            filename = downloader.download()
+            
             response = send_file(
                 filename,
                 as_attachment=True,
@@ -66,12 +184,14 @@ def index():
             @response.call_on_close
             def cleanup():
                 try:
-                    os.remove(filename)
-                    if not os.listdir(download_path):
-                        os.rmdir(download_path)
-                except:
+                    if os.path.exists(filename):
+                        os.remove(filename)
+                    if os.path.exists(DOWNLOAD_PATH):
+                        shutil.rmtree(DOWNLOAD_PATH)
+                except Exception:
                     pass
 
+            download_status['state'] = 'done'
             return response
 
         except ValueError as e:
@@ -80,70 +200,6 @@ def index():
             return render_template('index.html', error=f"An error occurred: {str(e)}")
 
     return render_template('index.html')
-
-@app.route('/get-formats', methods=['POST'])
-def get_formats():
-    video_url = request.form.get('video_url')
-    
-    try:
-        ydl_opts = {
-            'quiet': True,
-            'no_warnings': True,
-        }
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(video_url, download=False)
-            formats = []
-            
-            # Add best quality option at the top
-            formats.append({
-                'format_id': '(bestvideo+bestaudio/best)[ext=mp4]',
-                'text': '🔥 Maximum Quality',
-                'height': 9999
-            })
-
-            # Get video formats
-            video_formats = []
-            for f in info['formats']:
-                if f.get('vcodec') != 'none' and f.get('height'):
-                    video_formats.append(f)
-
-            # Sort by height and add to formats list
-            seen_heights = set()
-            for fmt in sorted(video_formats, key=lambda x: (x.get('height', 0), x.get('tbr', 0)), reverse=True):
-                height = fmt.get('height', 0)
-                if height not in seen_heights:
-                    seen_heights.add(height)
-                    
-                    # Create format string that ensures we get this exact height with best audio
-                    format_id = f"(bestvideo[height={height}]+bestaudio/best[height={height}])[ext=mp4]"
-                    
-                    # Create quality label
-                    quality_label = f"{height}p"
-                    if height >= 2160:
-                        quality_label += " 4K"
-                    elif height >= 1440:
-                        quality_label += " 2K"
-                    elif height >= 1080:
-                        quality_label += " FHD"
-                    elif height >= 720:
-                        quality_label += " HD"
-                    
-                    # Add bitrate if available
-                    tbr = fmt.get('tbr', 0)
-                    if tbr > 0:
-                        quality_label += f" ({round(tbr/1000, 1)}Mbps)"
-                    
-                    formats.append({
-                        'format_id': format_id,
-                        'text': quality_label,
-                        'height': height
-                    })
-            
-            return jsonify({'formats': formats})
-            
-    except Exception as e:
-        return jsonify({'error': str(e)}), 400
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -35,12 +35,39 @@ cd youtube-downloader
 ```
 
 2. Install dependencies:
+### Install Flask
 
 ```bash
 pip install Flask
 ```
+### Install yt_dlp
 ```bash
 pip install yt-dlp
+```
+
+### Install FFmpeg
+#### Windows
+```bash
+winget install Ffmpeg
+```
+
+#### Linux
+For Debian/Ubuntu:
+```bash
+sudo apt update && sudo apt install ffmpeg
+```
+For Fedora:
+```bash
+sudo dnf install ffmpeg
+```
+For Arch:
+```bash
+sudo pacman -S ffmpeg
+```
+
+#### Mac
+```bash
+brew install ffmpeg
 ```
 
 3. Run the application:

@@ -1,302 +1,468 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>YouTube Downloader</title>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YAYVD - YouTube Downloader</title>
     <style>
         :root {
-            --bg-color: #000000;
-            --card-bg: #111111;
+            --accent-color: #ff4444;
+            --bg-color: #1a1a1a;
+            --card-bg: #242424;
             --text-color: #ffffff;
-            --input-bg: #1a1a1a;
-            --input-border: #333333;
-            --accent-color: #ff0000;
-            --error-color: #ff4444;
         }
 
+        /* Reset and base styles */
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            touch-action: manipulation;
         }
 
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-
-        .container {
-            background-color: var(--card-bg);
-            width: 100%;
-            max-width: 500px;
+        /* Common styles */
+        .card, .status-wrapper {
+            background: var(--card-bg);
             padding: 2rem;
-            border-radius: 12px;
+            border-radius: 16px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
-        .logo {
-            color: var(--accent-color);
-            font-size: 1.8rem;
-            text-align: center;
-            margin-bottom: 1.5rem;
+        /* Form elements common styles */
+        button, select, input[type="text"] {
+            min-height: 44px;
+            padding: 1rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
         }
 
-        h1 {
-            font-size: 1.5rem;
-            font-weight: 500;
-            text-align: center;
-            margin-bottom: 2rem;
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg-color);
             color: var(--text-color);
-        }
-
-        form {
+            line-height: 1.6;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(45deg, var(--accent-color), #ff8080);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header p {
+            color: #888;
+            font-size: 1.1rem;
+        }
+
+        #downloadForm {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .input-group {
+            display: flex;
             gap: 1rem;
         }
 
-        input[type="url"],
-        .format-select {
-            width: 100%;
-            padding: 0.8rem 1rem;
-            background: var(--input-bg);
-            border: 1px solid var(--input-border);
-            border-radius: 8px;
+        input[type="text"] {
+            flex: 1;
+            border: 2px solid #333;
+            background: rgba(255, 255, 255, 0.05);
             color: var(--text-color);
-            font-size: 0.9rem;
-            transition: border-color 0.2s ease;
         }
 
-        input[type="url"]:focus,
-        .format-select:focus {
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 2px rgba(255, 68, 68, 0.2);
+        }
+
+        button {
+            background: var(--accent-color);
+            border: none;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #ff5555;
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        select {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid #333;
+            color: var(--text-color);
+            cursor: pointer;
+        }
+
+        select:focus {
             outline: none;
             border-color: var(--accent-color);
         }
 
-        .format-select {
-            cursor: pointer;
-            display: none;
-        }
-
-        .format-select option {
-            background-color: var(--input-bg);
-            color: var(--text-color);
-            padding: 8px;
-        }
-
-        input[type="submit"] {
-            background-color: var(--accent-color);
-            color: white;
-            border: none;
-            padding: 0.8rem;
-            border-radius: 8px;
-            font-size: 0.9rem;
-            cursor: pointer;
-            transition: opacity 0.2s ease;
-        }
-
-        input[type="submit"]:hover {
-            opacity: 0.9;
-        }
-
-        .loading {
-            display: none;
-            text-align: center;
-            margin-top: 1rem;
-        }
-
-        .loading-spinner {
-            display: inline-block;
-            width: 1.5rem;
-            height: 1.5rem;
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            border-top-color: var(--text-color);
+        .spinner {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 1.5rem;
+            border: 4px solid rgba(255, 68, 68, 0.1);
+            border-left-color: var(--accent-color);
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
 
-        .error {
-            background: rgba(255, 0, 0, 0.1);
-            color: var(--error-color);
-            padding: 0.8rem;
+        .status-text {
+            font-size: 1.2rem;
+            font-weight: 500;
+        }
+
+        .success-message {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .checkmark {
+            width: 48px;
+            height: 48px;
+        }
+
+        .error-message {
+            background: rgba(255, 68, 68, 0.1);
+            color: #ff4444;
+            padding: 1rem;
             border-radius: 8px;
             margin-top: 1rem;
-            font-size: 0.9rem;
+            text-align: center;
         }
 
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
 
-        /* Mobile adjustments */
-        @media (max-width: 480px) {
-            .container {
-                padding: 1.5rem;
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
             }
 
-            h1 {
-                font-size: 1.2rem;
+            .container {
+                width: 100%;
+                padding: 0;
+            }
+
+            .header {
+                margin-bottom: 1.5rem;
             }
 
             .logo {
-                font-size: 1.5rem;
+                font-size: 2.2rem;
+            }
+
+            .card {
+                padding: 1.25rem;
+                margin-bottom: 1.5rem;
+            }
+
+            .input-group {
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+
+            input[type="text"] {
+                width: 100%;
+                padding: 0.875rem;
+                font-size: 16px; /* Prevents iOS zoom */
+            }
+
+            button {
+                width: 100%;
+                padding: 0.875rem;
+                font-size: 16px;
+            }
+
+            #formatSelect {
+                margin-top: 0.75rem;
+                padding: 0.875rem;
+                font-size: 16px;
+            }
+
+            .status-wrapper {
+                padding: 1.25rem;
+                margin: 0 0.5rem;
+            }
+
+            .spinner {
+                width: 40px;
+                height: 40px;
+                border-width: 3px;
+            }
+
+            .status-text {
+                font-size: 1rem;
+            }
+
+            .success-message {
+                padding: 0.5rem;
+            }
+
+            .checkmark {
+                width: 40px;
+                height: 40px;
+            }
+
+            .error-message {
+                margin: 1rem 0.5rem;
+                padding: 0.875rem;
+                font-size: 0.9rem;
             }
         }
 
-        .branding {
-            text-align: center;
-            margin-bottom: 2rem;
+        /* Additional mobile improvements */
+        @media (max-width: 480px) {
+            .logo {
+                font-size: 2rem;
+            }
+
+            .header p {
+                font-size: 0.9rem;
+            }
+
+            .card {
+                padding: 1rem;
+            }
+
+            input[type="text"]::placeholder {
+                font-size: 14px;
+            }
         }
 
-        .branding h1 {
-            font-size: 2.2rem;
-            font-weight: 700;
+        /* Smooth scroll behavior */
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* Prevent pull-to-refresh on mobile */
+        body {
+            overscroll-behavior-y: contain;
+        }
+
+        .logo {
+            font-size: 2.5rem;
+            font-weight: 800;
+            letter-spacing: -1px;
             margin-bottom: 0.5rem;
-            background: linear-gradient(45deg, var(--accent-color), #ff6b6b);
+            background: linear-gradient(45deg, var(--accent-color), #ff8080);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            background-clip: text;
         }
 
-        .subtitle {
-            color: #888;
-            font-size: 0.9rem;
-            margin-top: -0.5rem;
+        .logo span {
+            font-weight: 300;
         }
 
-        @media (max-width: 480px) {
-            .branding h1 {
-                font-size: 1.8rem;
-            }
-            
-            .subtitle {
-                font-size: 0.8rem;
-            }
+        #formatSelect {
+            display: none; /* Hidden by default */
+            margin-top: 1rem;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid #333;
+            color: var(--text-color);
+            transition: all 0.3s ease;
+        }
+
+        #formatSelect option {
+            background: var(--card-bg);
+            color: var(--text-color);
+            padding: 10px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-left: 10px;
         }
     </style>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
     <div class="container">
-        <div class="logo">
-            <i class="fab fa-youtube"></i>
-        </div>
-        <div class="branding">
-            <h1>YayVD</h1>
-            <p class="subtitle">Yet Another YouTube Video Downloader</p>
+        <div class="header">
+            <h1 class="logo">YAY<span>VD</span></h1>
+            <p>Yet Another YouTube Video Downloader</p>
         </div>
 
-        <form method="POST" id="downloadForm">
-            <input type="url" id="video_url" name="video_url" 
-                   placeholder="Paste YouTube URL here" required>
-            
-            <select name="format" id="formatSelect" class="format-select">
-                <option value="best">Select Quality</option>
-            </select>
-            
-            <input type="submit" id="submitBtn" value="Download">
-        </form>
+        <div class="card">
+            <form id="downloadForm" method="post">
+                <div class="input-group">
+                    <input type="text" name="video_url" id="videoUrl" placeholder="Paste YouTube URL here" required>
+                    <button type="submit" id="submitBtn">Download</button>
+                </div>
+                <select name="format" id="formatSelect">
+                    <!-- Options will be dynamically populated with video size -->
+                </select>
+            </form>
+        </div>
 
-        <div class="loading" id="loadingIndicator">
-            <div class="loading-spinner"></div>
+        <div id="downloadStatus" style="display: none;" class="status-wrapper">
+            <div class="spinner"></div>
+            <div class="status-text">Downloading video...</div>
+            <div class="success-message" style="display: none;">
+                <svg class="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+                    <circle class="checkmark-circle" cx="26" cy="26" r="25" fill="none" stroke="var(--accent-color)" stroke-width="2"/>
+                    <path class="checkmark-check" fill="none" stroke="var(--accent-color)" stroke-width="2" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+                </svg>
+                <div>Video Downloaded Successfully!</div>
+            </div>
         </div>
 
         {% if error %}
-        <div class="error">
-            <i class="fas fa-exclamation-circle"></i> {{ error }}
+        <div class="error-message">
+            {{ error }}
         </div>
         {% endif %}
     </div>
 
     <script>
-        const videoInput = document.getElementById('video_url');
-        const formatSelect = document.getElementById('formatSelect');
-        const downloadForm = document.getElementById('downloadForm');
-        const loadingIndicator = document.getElementById('loadingIndicator');
-        const submitBtn = document.getElementById('submitBtn');
-        let formatCheckTimeout;
+        // Cache DOM elements
+        const elements = {
+            form: document.getElementById('downloadForm'),
+            urlInput: document.getElementById('videoUrl'),
+            formatSelect: document.getElementById('formatSelect'),
+            submitBtn: document.getElementById('submitBtn'),
+            status: document.getElementById('downloadStatus'),
+            statusText: document.querySelector('.status-text'),
+            spinner: document.querySelector('.spinner'),
+            successMessage: document.querySelector('.success-message')
+        };
 
-        videoInput.addEventListener('input', function() {
-            clearTimeout(formatCheckTimeout);
-            formatSelect.style.display = 'none';
-            formatSelect.innerHTML = '<option value="best">Select Quality</option>';
-            
-            if (this.value.match(/^https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)/)) {
-                formatCheckTimeout = setTimeout(getFormats, 1000);
-            }
-        });
+        // Create loading indicator once
+        const loadingIndicator = document.createElement('div');
+        loadingIndicator.className = 'loading';
+        loadingIndicator.style.display = 'none';
+        elements.submitBtn.appendChild(loadingIndicator);
 
-        function getFormats() {
-            const loadingText = document.createElement('option');
-            loadingText.text = 'Loading formats...';
-            formatSelect.innerHTML = '';
-            formatSelect.appendChild(loadingText);
-            formatSelect.style.display = 'block';
-
-            const formData = new FormData();
-            formData.append('video_url', videoInput.value);
-
-            fetch('/get-formats', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                formatSelect.innerHTML = '';
-                if (data.formats) {
-                    data.formats.forEach(format => {
-                        const option = document.createElement('option');
-                        option.value = format.format_id;
-                        option.text = format.text;
-                        formatSelect.appendChild(option);
-                    });
-                    formatSelect.style.display = 'block';
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                formatSelect.style.display = 'none';
-            });
+        // Debounce function for URL input
+        function debounce(func, wait) {
+            let timeout;
+            return function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), wait);
+            };
         }
 
-        downloadForm.addEventListener('submit', function(e) {
-            loadingIndicator.style.display = 'block';
-            submitBtn.disabled = true;
-            submitBtn.style.opacity = '0.7';
-            
-            // Create a timeout to check if the download prompt appeared
-            setTimeout(() => {
-                // If the download hasn't started after 2 seconds, start checking for it
-                const checkDownloadStarted = setInterval(() => {
-                    // Check if the button is still disabled (download hasn't started)
-                    if (document.activeElement.tagName === 'IFRAME' || 
-                        document.activeElement.tagName === 'OBJECT' || 
-                        document.hidden) {
-                        // Download prompt detected, reset the UI
-                        clearInterval(checkDownloadStarted);
-                        resetUI();
-                    }
-                }, 500); // Check every 500ms
+        // Handle URL input with debounce
+        elements.urlInput.addEventListener('input', debounce(async function() {
+            const url = this.value.trim();
+            if (!url) {
+                elements.formatSelect.style.display = 'none';
+                return;
+            }
 
-                // Set a maximum timeout of 60 seconds
-                setTimeout(() => {
-                    clearInterval(checkDownloadStarted);
-                    resetUI();
-                }, 60000);
-            }, 2000);
+            loadingIndicator.style.display = 'inline-block';
+            elements.submitBtn.disabled = true;
+
+            try {
+                const response = await fetch('/get-formats', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `video_url=${encodeURIComponent(url)}`
+                });
+                const data = await response.json();
+
+                if (data.formats) {
+                    elements.formatSelect.innerHTML = data.formats
+                        .map(format => `<option value="${format.format_id}">${format.text}</option>`)
+                        .join('');
+                    elements.formatSelect.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            } finally {
+                loadingIndicator.style.display = 'none';
+                elements.submitBtn.disabled = false;
+            }
+        }, 500));
+
+        // Your existing form submission code remains the same
+        elements.form.addEventListener('submit', function(e) {
+            const statusDiv = elements.status;
+            const statusText = elements.statusText;
+            const spinner = elements.spinner;
+            const successMessage = elements.successMessage;
+            
+            statusDiv.style.display = 'block';
+            spinner.style.display = 'block';
+            successMessage.style.display = 'none';
+            statusText.style.display = 'block';
+            
+            const checkStatus = setInterval(function() {
+                fetch('/check-status')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.state === 'downloading') {
+                            statusText.textContent = 'Downloading video...';
+                        } else if (data.state === 'processing') {
+                            statusText.textContent = 'Processing video...';
+                        } else if (data.state === 'done') {
+                            clearInterval(checkStatus);
+                            spinner.style.display = 'none';
+                            statusText.style.display = 'none';
+                            successMessage.style.display = 'block';
+                            setTimeout(() => {
+                                statusDiv.style.display = 'none';
+                                resetUI();
+                            }, 3000);
+                        }
+                    });
+            }, 1000);
         });
 
-        // Function to reset the UI state
         function resetUI() {
+            const statusDiv = elements.status;
+            const spinner = elements.spinner;
+            const successMessage = elements.successMessage;
+            const statusText = elements.statusText;
+            
+            statusDiv.style.display = 'none';
+            spinner.style.display = 'block';
+            successMessage.style.display = 'none';
+            statusText.style.display = 'block';
             loadingIndicator.style.display = 'none';
-            submitBtn.disabled = false;
-            submitBtn.style.opacity = '1';
+            elements.submitBtn.disabled = false;
+            elements.submitBtn.style.opacity = '1';
+            elements.formatSelect.style.display = 'none';
+            elements.urlInput.value = '';
         }
     </script>
 </body>
