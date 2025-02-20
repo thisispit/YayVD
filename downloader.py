@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 import asyncio
 import tempfile
 from werkzeug.middleware.proxy_fix import ProxyFix
+import requests
 
 app = Flask(__name__)
 
@@ -200,6 +201,16 @@ def index():
             return render_template('index.html', error=str(e))
         except Exception as e:
             return render_template('index.html', error=f"An error occurred: {str(e)}")
+
+    try:
+        # Example request
+        response = requests.get('https://www.youtube.com')
+        # Your existing code to handle the response
+        ...
+    except ValueError as e:
+        return render_template('index.html', error=str(e))
+    except Exception as e:
+        return render_template('index.html', error=f"An error occurred: {str(e)}")
 
     return render_template('index.html')
 
