@@ -9,7 +9,6 @@ from concurrent.futures import ThreadPoolExecutor
 import asyncio
 import tempfile
 from werkzeug.middleware.proxy_fix import ProxyFix
-import requests
 
 app = Flask(__name__)
 
@@ -20,12 +19,6 @@ DEFAULT_FORMAT = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]'
 
 # Global state
 download_status = {'state': 'idle'}
-
-# Set up proxies
-proxies = {
-    'http': 'https://18.223.25.15:80',
-    'https': 'https://18.223.25.15:80',
-}
 
 class VideoDownloader:
     def __init__(self, url: str, format_id: str):
@@ -207,16 +200,6 @@ def index():
             return render_template('index.html', error=str(e))
         except Exception as e:
             return render_template('index.html', error=f"An error occurred: {str(e)}")
-
-    try:
-        # Example request using proxies
-        response = requests.get('https://www.youtube.com', proxies=proxies)
-        # Your existing code to handle the response
-        ...
-    except ValueError as e:
-        return render_template('index.html', error=str(e))
-    except Exception as e:
-        return render_template('index.html', error=f"An error occurred: {str(e)}")
 
     return render_template('index.html')
 
