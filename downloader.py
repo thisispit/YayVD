@@ -9,7 +9,6 @@ from concurrent.futures import ThreadPoolExecutor
 import asyncio
 import tempfile
 from werkzeug.middleware.proxy_fix import ProxyFix
-import requests
 
 app = Flask(__name__)
 
