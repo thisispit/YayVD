@@ -7,7 +7,8 @@ from typing import Dict, Any
 import logging
 import sys
 
-app = Flask(__name__)
+app = Flask(__name__, 
+    template_folder=os.path.abspath(os.path.join(os.path.dirname(__file__), 'templates')))
 
 # Configuration
 DOWNLOAD_PATH = "/tmp/downloads"  # Changed to use /tmp for Render compatibility

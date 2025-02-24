@@ -5,9 +5,11 @@ services:
     buildCommand: |
       apt-get update && apt-get install -y ffmpeg
       pip install -r requirements.txt
-    startCommand: gunicorn downloader:app --timeout 300
+    startCommand: "cd /opt/render/project/src && gunicorn 'downloader:app' --timeout 300 --log-level debug"
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
       - key: PORT
         value: 10000
+      - key: PYTHONPATH
+        value: /opt/render/project/src
