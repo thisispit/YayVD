@@ -4,6 +4,8 @@ import os
 import json
 import shutil
 from typing import Dict, Any
+import logging
+import sys
 
 app = Flask(__name__)
 
@@ -14,6 +16,14 @@ DEFAULT_FORMAT = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]'
 
 # Global state
 download_status = {'state': 'idle'}
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    stream=sys.stdout
+)
+logger = logging.getLogger(__name__)
 
 class VideoDownloader:
     def __init__(self, url: str, format_id: str):
@@ -111,10 +121,12 @@ class VideoDownloader:
     def download(self) -> str:
         """Download the video and return the filename."""
         try:
+            logger.info(f"Starting download for URL: {self.url}")
             self._ensure_download_directory()
             
             ydl_opts = self._get_download_options()
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                logger.info("Extracting video info...")
                 info = ydl.extract_info(self.url, download=True)
                 self.filename = ydl.prepare_filename(info)
                 
@@ -122,11 +134,14 @@ class VideoDownloader:
                     self.filename = f"{os.path.splitext(self.filename)[0]}.mp4"
                 
                 if not os.path.exists(self.filename):
+                    logger.error("Download failed - File not found")
                     raise ValueError("Download failed")
                 
+                logger.info(f"Download completed: {self.filename}")
                 return self.filename
                 
         except Exception as e:
+            logger.error(f"Download error: {str(e)}")
             self._cleanup()
             raise ValueError(f"Download error: {str(e)}")
 
