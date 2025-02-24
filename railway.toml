@@ -11,4 +11,3 @@ restartPolicyType = "on_failure"
 port = "$PORT"
 internal_port = 8000
 name = "yayvd"
-port = "8080"
