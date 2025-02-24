@@ -4,16 +4,11 @@ import os
 import json
 import shutil
 from typing import Dict, Any
-from functools import lru_cache
-from concurrent.futures import ThreadPoolExecutor
-import asyncio
-import tempfile
-from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
 
 # Configuration
-DOWNLOAD_PATH = os.path.join(tempfile.gettempdir(), "yayvd_downloads")
+DOWNLOAD_PATH = "/tmp/downloads"  # Changed to use /tmp for Render compatibility
 ALLOWED_DOMAINS = ('youtube.com', 'youtu.be')
 DEFAULT_FORMAT = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]'
 
@@ -25,20 +20,20 @@ class VideoDownloader:
         self.url = url
         self.format_id = format_id
         self.filename = ""
-        self._executor = ThreadPoolExecutor(max_workers=2)
         
-    @lru_cache(maxsize=32)
     def get_formats(self) -> list:
-        """Extract available video formats with caching."""
+        """Extract available video formats."""
         try:
             with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
                 info = ydl.extract_info(self.url, download=False)
-                return self._process_formats(info)
+                formats = self._process_formats(info)
+                return formats
         except Exception as e:
             raise ValueError(f"Error fetching video formats: {str(e)}")
 
     def _process_formats(self, info: Dict[str, Any]) -> list:
-        """Process and filter video formats with improved efficiency."""
+        """Process and filter video formats."""
+        # Best quality option
         formats = [{
             'format_id': DEFAULT_FORMAT,
             'text': '🔥 Maximum Quality',
@@ -46,25 +41,50 @@ class VideoDownloader:
             'filesize': self._get_format_size(info, DEFAULT_FORMAT)
         }]
         
-        # Filter and sort formats in one pass
-        video_formats = sorted(
-            (f for f in info['formats'] 
-             if f.get('vcodec') != 'none' and f.get('height')),
-            key=lambda x: (x.get('height', 0), x.get('tbr', 0)),
-            reverse=True
-        )
+        video_formats = [f for f in info['formats'] 
+                        if f.get('vcodec') != 'none' and f.get('height')]
         
         seen_heights = set()
-        return formats + [
-            self._create_format_option(fmt, fmt['height'], info)
-            for fmt in video_formats
-            if fmt['height'] not in seen_heights 
-            and not seen_heights.add(fmt['height'])
-        ]
+        for fmt in sorted(video_formats, 
+                         key=lambda x: (x.get('height', 0), x.get('tbr', 0)), 
+                         reverse=True):
+            height = fmt.get('height', 0)
+            if height not in seen_heights:
+                seen_heights.add(height)
+                formats.append(self._create_format_option(fmt, height, info))
+        
+        return formats
 
-    @lru_cache(maxsize=64)
+    def _create_format_option(self, fmt: Dict[str, Any], height: int, info: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a format option with appropriate label and size."""
+        quality_label = f"{height}p"
+        if height >= 2160:
+            quality_label += " 4K"
+        elif height >= 1440:
+            quality_label += " 2K"
+        elif height >= 1080:
+            quality_label += " FHD"
+        elif height >= 720:
+            quality_label += " HD"
+
+        if tbr := fmt.get('tbr', 0):
+            quality_label += f" ({round(tbr/1000, 1)}Mbps)"
+
+        format_id = f"bestvideo[height={height}]+bestaudio/best[height={height}]"
+        filesize = self._get_format_size(info, format_id)
+        
+        if filesize:
+            quality_label += f" - {filesize}"
+
+        return {
+            'format_id': format_id,
+            'text': quality_label,
+            'height': height,
+            'filesize': filesize
+        }
+
     def _get_format_size(self, info: Dict[str, Any], format_id: str) -> str:
-        """Calculate and format the file size with caching."""
+        """Calculate and format the file size for a given format."""
         try:
             with yt_dlp.YoutubeDL({
                 'format': format_id,
@@ -72,17 +92,19 @@ class VideoDownloader:
                 'no_warnings': True
             }) as ydl:
                 format_info = ydl.extract_info(self.url, download=False)
-                filesize = format_info.get('filesize') or format_info.get('filesize_approx', 0)
-                
+                filesize = format_info.get('filesize', 0)
                 if not filesize:
-                    return ""
-                    
-                # Use integer division for faster computation
-                if filesize < 1048576:  # 1024 * 1024
-                    return f"{filesize // 1024:.1f}KB"
-                elif filesize < 1073741824:  # 1024 * 1024 * 1024
-                    return f"{filesize // 1048576:.1f}MB"
-                return f"{filesize // 1073741824:.1f}GB"
+                    filesize = format_info.get('filesize_approx', 0)
+                
+                if filesize:
+                    # Convert to appropriate unit
+                    if filesize < 1024 * 1024:  # Less than 1MB
+                        return f"{filesize / 1024:.1f}KB"
+                    elif filesize < 1024 * 1024 * 1024:  # Less than 1GB
+                        return f"{filesize / (1024 * 1024):.1f}MB"
+                    else:  # GB or larger
+                        return f"{filesize / (1024 * 1024 * 1024):.1f}GB"
+                return ""
         except:
             return ""
 
@@ -132,9 +154,17 @@ class VideoDownloader:
     @staticmethod
     def _ensure_download_directory() -> None:
         """Ensure clean download directory exists."""
-        if os.path.exists(DOWNLOAD_PATH):
-            shutil.rmtree(DOWNLOAD_PATH)
-        os.makedirs(DOWNLOAD_PATH)
+        try:
+            if os.path.exists(DOWNLOAD_PATH):
+                shutil.rmtree(DOWNLOAD_PATH)
+            os.makedirs(DOWNLOAD_PATH, exist_ok=True)
+        except Exception:
+            # Fallback to current directory if /tmp is not accessible
+            global DOWNLOAD_PATH
+            DOWNLOAD_PATH = "downloads"
+            if os.path.exists(DOWNLOAD_PATH):
+                shutil.rmtree(DOWNLOAD_PATH)
+            os.makedirs(DOWNLOAD_PATH)
 
     @staticmethod
     def _cleanup() -> None:
@@ -147,14 +177,14 @@ def is_valid_url(url: str) -> bool:
     return any(domain in url for domain in ALLOWED_DOMAINS)
 
 @app.route('/get-formats', methods=['POST'])
-async def get_formats():
+def get_formats():
     try:
         url = request.form.get('video_url')
         if not is_valid_url(url):
             raise ValueError('Invalid YouTube URL')
             
         downloader = VideoDownloader(url, DEFAULT_FORMAT)
-        formats = await asyncio.to_thread(downloader.get_formats)
+        formats = downloader.get_formats()
         return jsonify({'formats': formats})
     except Exception as e:
         return jsonify({'error': str(e)}), 400
@@ -201,20 +231,8 @@ def index():
         except Exception as e:
             return render_template('index.html', error=f"An error occurred: {str(e)}")
 
-    try:
-        # Example request
-        response = requests.get('https://www.youtube.com')
-        # Your existing code to handle the response
-        ...
-    except ValueError as e:
-        return render_template('index.html', error=str(e))
-    except Exception as e:
-        return render_template('index.html', error=f"An error occurred: {str(e)}")
-
     return render_template('index.html')
 
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
-
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port)

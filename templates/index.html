@@ -12,29 +12,10 @@
             --text-color: #ffffff;
         }
 
-        /* Reset and base styles */
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            touch-action: manipulation;
-        }
-
-        /* Common styles */
-        .card, .status-wrapper {
-            background: var(--card-bg);
-            padding: 2rem;
-            border-radius: 16px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-
-        /* Form elements common styles */
-        button, select, input[type="text"] {
-            min-height: 44px;
-            padding: 1rem;
-            border-radius: 8px;
-            font-size: 1rem;
-            transition: all 0.3s ease;
         }
 
         body {
@@ -73,6 +54,14 @@
             font-size: 1.1rem;
         }
 
+        .card {
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+
         #downloadForm {
             display: flex;
             flex-direction: column;
@@ -86,9 +75,13 @@
 
         input[type="text"] {
             flex: 1;
+            padding: 1rem;
             border: 2px solid #333;
             background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
             color: var(--text-color);
+            font-size: 1rem;
+            transition: all 0.3s ease;
         }
 
         input[type="text"]:focus {
@@ -98,11 +91,15 @@
         }
 
         button {
+            padding: 1rem 2rem;
             background: var(--accent-color);
             border: none;
+            border-radius: 8px;
             color: white;
+            font-size: 1rem;
             font-weight: 600;
             cursor: pointer;
+            transition: all 0.3s ease;
         }
 
         button:hover {
@@ -116,15 +113,26 @@
 
         select {
             width: 100%;
+            padding: 1rem;
             background: rgba(255, 255, 255, 0.05);
             border: 2px solid #333;
+            border-radius: 8px;
             color: var(--text-color);
+            font-size: 1rem;
             cursor: pointer;
         }
 
         select:focus {
             outline: none;
             border-color: var(--accent-color);
+        }
+
+        .status-wrapper {
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
         }
 
         .spinner {
@@ -263,6 +271,18 @@
             }
         }
 
+        /* Prevent double-tap zoom on iOS */
+        * {
+            touch-action: manipulation;
+        }
+
+        /* Better tap targets for mobile */
+        button, 
+        select, 
+        input[type="text"] {
+            min-height: 44px; /* Apple's recommended minimum */
+        }
+
         /* Smooth scroll behavior */
         html {
             scroll-behavior: smooth;
@@ -291,10 +311,19 @@
             display: none; /* Hidden by default */
             margin-top: 1rem;
             width: 100%;
+            padding: 1rem;
             background: rgba(255, 255, 255, 0.05);
             border: 2px solid #333;
+            border-radius: 8px;
             color: var(--text-color);
+            font-size: 1rem;
+            cursor: pointer;
             transition: all 0.3s ease;
+        }
+
+        #formatSelect:focus {
+            outline: none;
+            border-color: var(--accent-color);
         }
 
         #formatSelect option {
@@ -354,72 +383,66 @@
     </div>
 
     <script>
-        // Cache DOM elements
-        const elements = {
-            form: document.getElementById('downloadForm'),
-            urlInput: document.getElementById('videoUrl'),
-            formatSelect: document.getElementById('formatSelect'),
-            submitBtn: document.getElementById('submitBtn'),
-            status: document.getElementById('downloadStatus'),
-            statusText: document.querySelector('.status-text'),
-            spinner: document.querySelector('.spinner'),
-            successMessage: document.querySelector('.success-message')
-        };
-
-        // Create loading indicator once
+        const downloadForm = document.getElementById('downloadForm');
+        const videoUrlInput = document.getElementById('videoUrl');
+        const formatSelect = document.getElementById('formatSelect');
+        const submitBtn = document.getElementById('submitBtn');
         const loadingIndicator = document.createElement('div');
         loadingIndicator.className = 'loading';
         loadingIndicator.style.display = 'none';
-        elements.submitBtn.appendChild(loadingIndicator);
+        submitBtn.appendChild(loadingIndicator);
 
-        // Debounce function for URL input
-        function debounce(func, wait) {
-            let timeout;
-            return function(...args) {
-                clearTimeout(timeout);
-                timeout = setTimeout(() => func.apply(this, args), wait);
-            };
-        }
-
-        // Handle URL input with debounce
-        elements.urlInput.addEventListener('input', debounce(async function() {
-            const url = this.value.trim();
-            if (!url) {
-                elements.formatSelect.style.display = 'none';
-                return;
-            }
-
-            loadingIndicator.style.display = 'inline-block';
-            elements.submitBtn.disabled = true;
-
-            try {
-                const response = await fetch('/get-formats', {
+        // Handle URL input
+        videoUrlInput.addEventListener('input', function() {
+            if (this.value.trim()) {
+                // Show loading indicator
+                loadingIndicator.style.display = 'inline-block';
+                submitBtn.disabled = true;
+                
+                // Fetch available formats
+                fetch('/get-formats', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `video_url=${encodeURIComponent(url)}`
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `video_url=${encodeURIComponent(this.value)}`
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.formats) {
+                        // Clear existing options
+                        formatSelect.innerHTML = '';
+                        
+                        // Add new options
+                        data.formats.forEach(format => {
+                            const option = document.createElement('option');
+                            option.value = format.format_id;
+                            option.textContent = `${format.text} (${format.size})`;
+                            formatSelect.appendChild(option);
+                        });
+                        
+                        // Show format select
+                        formatSelect.style.display = 'block';
+                        submitBtn.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                })
+                .finally(() => {
+                    loadingIndicator.style.display = 'none';
                 });
-                const data = await response.json();
-
-                if (data.formats) {
-                    elements.formatSelect.innerHTML = data.formats
-                        .map(format => `<option value="${format.format_id}">${format.text}</option>`)
-                        .join('');
-                    elements.formatSelect.style.display = 'block';
-                }
-            } catch (error) {
-                console.error('Error:', error);
-            } finally {
-                loadingIndicator.style.display = 'none';
-                elements.submitBtn.disabled = false;
+            } else {
+                formatSelect.style.display = 'none';
             }
-        }, 500));
+        });
 
         // Your existing form submission code remains the same
-        elements.form.addEventListener('submit', function(e) {
-            const statusDiv = elements.status;
-            const statusText = elements.statusText;
-            const spinner = elements.spinner;
-            const successMessage = elements.successMessage;
+        downloadForm.addEventListener('submit', function(e) {
+            const statusDiv = document.getElementById('downloadStatus');
+            const statusText = statusDiv.querySelector('.status-text');
+            const spinner = statusDiv.querySelector('.spinner');
+            const successMessage = statusDiv.querySelector('.success-message');
             
             statusDiv.style.display = 'block';
             spinner.style.display = 'block';
@@ -449,20 +472,20 @@
         });
 
         function resetUI() {
-            const statusDiv = elements.status;
-            const spinner = elements.spinner;
-            const successMessage = elements.successMessage;
-            const statusText = elements.statusText;
+            const statusDiv = document.getElementById('downloadStatus');
+            const spinner = statusDiv.querySelector('.spinner');
+            const successMessage = statusDiv.querySelector('.success-message');
+            const statusText = statusDiv.querySelector('.status-text');
             
             statusDiv.style.display = 'none';
             spinner.style.display = 'block';
             successMessage.style.display = 'none';
             statusText.style.display = 'block';
             loadingIndicator.style.display = 'none';
-            elements.submitBtn.disabled = false;
-            elements.submitBtn.style.opacity = '1';
-            elements.formatSelect.style.display = 'none';
-            elements.urlInput.value = '';
+            submitBtn.disabled = false;
+            submitBtn.style.opacity = '1';
+            formatSelect.style.display = 'none';
+            videoUrlInput.value = '';
         }
     </script>
 </body>
