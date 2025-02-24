@@ -9,5 +9,4 @@ restartPolicyType = "on_failure"
 
 [service]
 port = "$PORT"
-internal_port = 8000
 name = "yayvd"
