@@ -11,7 +11,7 @@ app = Flask(__name__,
     template_folder=os.path.abspath(os.path.join(os.path.dirname(__file__), 'templates')))
 
 # Configuration
-DOWNLOAD_PATH = "/tmp/downloads"  # Changed to use /tmp for Render compatibility
+DOWNLOAD_PATH = os.path.join(os.getcwd(), "downloads")  # Update download path for Railway
 ALLOWED_DOMAINS = ('youtube.com', 'youtu.be')
 DEFAULT_FORMAT = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]'
 
@@ -208,6 +208,10 @@ def get_formats():
 @app.route('/check-status')
 def check_status():
     return jsonify(download_status)
+
+@app.route('/health')
+def health():
+    return jsonify({"status": "healthy"}), 200
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
