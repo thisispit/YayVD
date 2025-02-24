@@ -1,0 +1,12 @@
+[build]
+builder = "nixpacks"
+buildCommand = "pip install -r requirements.txt"
+
+[deploy]
+startCommand = "gunicorn downloader:app"
+healthcheckPath = "/"
+restartPolicyType = "on_failure"
+
+[service]
+name = "yayvd"
+port = "8080"
