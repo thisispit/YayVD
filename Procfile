@@ -1,2 +1,1 @@
-web: gunicorn --bind 0.0.0.0:$PORT wsgi:app --timeout 300
-web: gunicorn downloader:app
+web: gunicorn downloader:app --bind 0.0.0.0:$PORT --timeout 300
