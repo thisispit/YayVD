@@ -1,12 +1,12 @@
 [build]
 builder = "nixpacks"
-buildCommand = "pip install -r requirements.txt"
+buildCommand = "apt-get update && apt-get install -y ffmpeg && pip install -r requirements.txt"
 
 [deploy]
-startCommand = "gunicorn downloader:app --bind 0.0.0.0:$PORT --timeout 300"
+startCommand = "gunicorn wsgi:app --timeout 300"
 healthcheckPath = "/health"
 restartPolicyType = "on_failure"
 
 [service]
-port = "$PORT"
 name = "yayvd"
+port = "8080"
