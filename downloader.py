@@ -170,13 +170,13 @@ class VideoDownloader:
     @staticmethod
     def _ensure_download_directory() -> None:
         """Ensure clean download directory exists."""
+        global DOWNLOAD_PATH
         try:
             if os.path.exists(DOWNLOAD_PATH):
                 shutil.rmtree(DOWNLOAD_PATH)
             os.makedirs(DOWNLOAD_PATH, exist_ok=True)
         except Exception:
             # Fallback to current directory if /tmp is not accessible
-            global DOWNLOAD_PATH
             DOWNLOAD_PATH = "downloads"
             if os.path.exists(DOWNLOAD_PATH):
                 shutil.rmtree(DOWNLOAD_PATH)
