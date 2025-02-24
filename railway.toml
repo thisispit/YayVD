@@ -1,6 +1,12 @@
 [build]
 builder = "nixpacks"
-buildCommand = "apt-get update && apt-get install -y ffmpeg && pip install -r requirements.txt"
+buildCommand = """
+mkdir -p /usr/local/bin
+curl -L https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-linux64-nightly.tar.xz | tar xJ
+cp ffmpeg-*/bin/ffmpeg /usr/local/bin/
+chmod +x /usr/local/bin/ffmpeg
+pip install -r requirements.txt
+"""
 
 [deploy]
 startCommand = "gunicorn wsgi:app --timeout 300"

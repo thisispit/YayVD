@@ -7,6 +7,9 @@ from typing import Dict, Any
 import logging
 import sys
 
+if os.path.exists("/usr/local/bin/ffmpeg"):
+    os.environ["PATH"] = "/usr/local/bin:" + os.environ["PATH"]
+
 app = Flask(__name__, 
     template_folder=os.path.abspath(os.path.join(os.path.dirname(__file__), 'templates')))
 
@@ -157,6 +160,7 @@ class VideoDownloader:
             'progress_hooks': [self._progress_hook],
             'format_sort': ['res', 'ext:mp4:m4a', 'tbr', 'id'],
             'format_sort_force': True,
+            'ffmpeg_location': '/usr/local/bin/ffmpeg',
             'postprocessors': [{
                 'key': 'FFmpegVideoConvertor',
                 'preferedformat': 'mp4',
