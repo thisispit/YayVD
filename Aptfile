@@ -1,3 +1,10 @@
+update
 ffmpeg
-ffmpeg-libs
+libavcodec-extra
+libavfilter-extra
+libavformat-extra
+libavutil-extra
+libpostproc-extra
+libswresample-extra
+libswscale-extra
 python-ffmpeg
