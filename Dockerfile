@@ -12,6 +12,10 @@ RUN apt-get update && \
 # Set working directory
 WORKDIR /app
 
+# Create downloads directory with proper permissions
+RUN mkdir -p /app/downloads && \
+    chmod 777 /app/downloads
+
 # Install Python packages
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -19,13 +23,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create downloads directory with proper permissions
-RUN mkdir -p /app/downloads && \
-    chmod 777 /app/downloads
+# Verify directories and permissions
+RUN ls -la /app && \
+    ls -la /app/downloads
 
 # Environment variables
 ENV PORT=8080
 ENV FFMPEG_PATH=/usr/bin/ffmpeg
+ENV DOWNLOAD_FOLDER=/app/downloads
 
 # Expose port
 EXPOSE 8080

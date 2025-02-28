@@ -9,8 +9,8 @@ import subprocess
 
 app = Flask(__name__)
 
-# Use absolute path for downloads folder
-DOWNLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'downloads')
+# Use absolute path for downloads folder within the container
+DOWNLOAD_FOLDER = '/app/downloads'
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
 # Store deletion jobs and cache downloaded files
@@ -254,9 +254,11 @@ def init_app():
     # Ensure download directory exists with proper permissions
     os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
     os.chmod(DOWNLOAD_FOLDER, 0o777)  # Make directory writable
-    cleanup_old_files()
     
-    print(f"Download directory: {DOWNLOAD_FOLDER}")  # Debug log
+    print(f"Download directory absolute path: {os.path.abspath(DOWNLOAD_FOLDER)}")  # Debug log
+    print(f"Current working directory: {os.getcwd()}")  # Debug log
+    
+    cleanup_old_files()
     
     # Verify FFmpeg installation
     ffmpeg_path = is_ffmpeg_installed()
