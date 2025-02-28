@@ -19,11 +19,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create downloads directory
-RUN mkdir -p downloads
-
-# Verify FFmpeg installation
-RUN ffmpeg -version
+# Create downloads directory with proper permissions
+RUN mkdir -p /app/downloads && \
+    chmod 777 /app/downloads
 
 # Environment variables
 ENV PORT=8080

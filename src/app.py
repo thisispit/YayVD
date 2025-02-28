@@ -9,9 +9,9 @@ import subprocess
 
 app = Flask(__name__)
 
-DOWNLOAD_FOLDER = 'downloads'
-if not os.path.exists(DOWNLOAD_FOLDER):
-    os.makedirs(DOWNLOAD_FOLDER)
+# Use absolute path for downloads folder
+DOWNLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'downloads')
+os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
 # Store deletion jobs and cache downloaded files
 deletion_queue = {}
@@ -251,9 +251,12 @@ def download():
 
 def init_app():
     """Initialize the application and verify dependencies."""
-    if not os.path.exists(DOWNLOAD_FOLDER):
-        os.makedirs(DOWNLOAD_FOLDER)
+    # Ensure download directory exists with proper permissions
+    os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
+    os.chmod(DOWNLOAD_FOLDER, 0o777)  # Make directory writable
     cleanup_old_files()
+    
+    print(f"Download directory: {DOWNLOAD_FOLDER}")  # Debug log
     
     # Verify FFmpeg installation
     ffmpeg_path = is_ffmpeg_installed()
