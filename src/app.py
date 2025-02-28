@@ -24,11 +24,20 @@ def sanitize_filename(title):
 def is_ffmpeg_installed(ffmpeg_location=None):
     """Check if ffmpeg is installed and accessible."""
     try:
-        # Simplified location check
-        if subprocess.run(['ffmpeg', '-version'], 
-                        stdout=subprocess.PIPE, 
-                        stderr=subprocess.PIPE).returncode == 0:
-            return 'ffmpeg'
+        # Check environment variable first
+        env_ffmpeg = os.environ.get('FFMPEG_PATH', '/usr/bin/ffmpeg')
+        
+        # Try running ffmpeg
+        result = subprocess.run([env_ffmpeg, '-version'], 
+                            stdout=subprocess.PIPE, 
+                            stderr=subprocess.PIPE,
+                            timeout=5)
+        if result.returncode == 0:
+            print(f"FFmpeg found at: {env_ffmpeg}")
+            return env_ffmpeg
+            
+        print(f"FFmpeg check failed with return code: {result.returncode}")
+        print(f"FFmpeg stderr: {result.stderr.decode()}")
         return False
     except Exception as e:
         print(f"FFmpeg check error: {e}")
@@ -247,10 +256,11 @@ def init_app():
     cleanup_old_files()
     
     # Verify FFmpeg installation
-    if not is_ffmpeg_installed():
+    ffmpeg_path = is_ffmpeg_installed()
+    if not ffmpeg_path:
         print("WARNING: FFmpeg not found. Only non-merged formats will be available.")
     else:
-        print("FFmpeg found and working.")
+        print(f"FFmpeg found and working at: {ffmpeg_path}")
 
 init_app()
 
