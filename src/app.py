@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_file
+from flask import Flask, render_template, request, send_file, after_this_request
 import yt_dlp
 import os
 from datetime import datetime, timedelta
@@ -26,16 +26,13 @@ def is_ffmpeg_installed(ffmpeg_location=None):
     try:
         # Check environment variable first
         env_ffmpeg = os.environ.get('FFMPEG_PATH', '/usr/bin/ffmpeg')
-        
-        # Try running ffmpeg
-        result = subprocess.run([env_ffmpeg, '-version'], 
-                            stdout=subprocess.PIPE, 
-                            stderr=subprocess.PIPE,
-                            timeout=5)
+        result = subprocess.run([env_ffmpeg, '-version'],
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE,
+                                timeout=5)
         if result.returncode == 0:
             print(f"FFmpeg found at: {env_ffmpeg}")
             return env_ffmpeg
-            
         print(f"FFmpeg check failed with return code: {result.returncode}")
         print(f"FFmpeg stderr: {result.stderr.decode()}")
         return False
@@ -52,7 +49,7 @@ def get_available_formats(url):
         'quiet': True,
         'no_warnings': True,
         'skip_download': True,
-        'cookiefile': '/app/cookies.txt',  # Use cookies file instead of browser
+        'cookiefile': '/app/cookies.txt',  # Use cookies file if needed
     }
     
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -116,7 +113,7 @@ def get_available_formats(url):
         
         formats = sorted(formats, key=sort_key, reverse=True)
         
-        # Remove duplicate resolutions (keep first occurrence)
+        # Remove duplicate resolutions (keeping first occurrence)
         seen = set()
         unique_formats = []
         for fmt in formats:
@@ -168,7 +165,10 @@ def index():
         youtube_url = request.form['youtube_url']
         try:
             formats, video_title = get_available_formats(youtube_url)
-            return render_template('select_format.html', formats=formats, youtube_url=youtube_url, video_title=video_title)
+            return render_template('select_format.html', 
+                                   formats=formats, 
+                                   youtube_url=youtube_url, 
+                                   video_title=video_title)
         except Exception as e:
             return render_template('index.html', error=str(e))
     return render_template('index.html')
@@ -200,16 +200,14 @@ def download():
         'add_metadata': True,
     }]
     if ('+' in format_id) or ('bestvideo' in format_id and 'bestaudio' in format_id):
-        # Check if ffmpeg is installed before proceeding.
         if not is_ffmpeg_installed():
             return render_template('index.html', error="FFmpeg is not installed. Please select a muxed format or install FFmpeg.")
         postprocessors.insert(0, {'key': 'FFmpegMerger'})
     
-    # Update ffmpeg location in ydl_opts
     ffmpeg_path = is_ffmpeg_installed()
     if not ffmpeg_path:
         return render_template('index.html', error="FFmpeg is not accessible")
-        
+    
     ydl_opts = {
         'format': format_id,
         'outtmpl': output_path,
@@ -218,7 +216,7 @@ def download():
         'no_warnings': False,
         'ffmpeg_location': ffmpeg_path,
         'postprocessors': postprocessors,
-        'cookiefile': '/app/cookies.txt',  # Use cookies file instead of browser
+        'cookiefile': '/app/cookies.txt',
     }
     
     downloaded_file = None
@@ -240,9 +238,14 @@ def download():
                 raise FileNotFoundError("Downloaded file not found")
             
             download_cache[cache_key] = {'file': downloaded_file, 'time': datetime.now()}
-            delayed_file_delete(downloaded_file, delay_seconds=60)
             
-            return send_file(downloaded_file, as_attachment=True, download_name=os.path.basename(downloaded_file))
+            # Create the response and schedule deletion after the response is sent.
+            response = send_file(downloaded_file, as_attachment=True, download_name=os.path.basename(downloaded_file))
+            @after_this_request
+            def remove_file(response):
+                delayed_file_delete(downloaded_file, delay_seconds=60)
+                return response
+            return response
     except Exception as e:
         if downloaded_file and os.path.exists(downloaded_file):
             try:
@@ -253,21 +256,16 @@ def download():
 
 def init_app():
     """Initialize the application and verify dependencies."""
-    # Ensure download directory exists with proper permissions
     os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
     os.chmod(DOWNLOAD_FOLDER, 0o777)  # Make directory writable
-    
-    print(f"Download directory absolute path: {os.path.abspath(DOWNLOAD_FOLDER)}")  # Debug log
-    print(f"Current working directory: {os.getcwd()}")  # Debug log
-    
+    print(f"Download directory: {os.path.abspath(DOWNLOAD_FOLDER)}")
+    print(f"Current working directory: {os.getcwd()}")
     cleanup_old_files()
-    
-    # Verify FFmpeg installation
     ffmpeg_path = is_ffmpeg_installed()
     if not ffmpeg_path:
         print("WARNING: FFmpeg not found. Only non-merged formats will be available.")
     else:
-        print(f"FFmpeg found and working at: {ffmpeg_path}")
+        print(f"FFmpeg found at: {ffmpeg_path}")
 
 init_app()
 
