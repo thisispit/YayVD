@@ -123,7 +123,7 @@ def get_available_formats(url):
                 
         return unique_formats, info['title']
 
-def delayed_file_delete(filepath, delay_seconds=60):
+def delayed_file_delete(filepath, delay_seconds=300):  # Increased to 5 minutes
     """Delete file after a delay (and remove it from cache)."""
     def delete_job():
         time.sleep(delay_seconds)
@@ -239,13 +239,22 @@ def download():
             
             download_cache[cache_key] = {'file': downloaded_file, 'time': datetime.now()}
             
-            # Create the response and schedule deletion after the response is sent.
-            response = send_file(downloaded_file, as_attachment=True, download_name=os.path.basename(downloaded_file))
+            response = send_file(
+                downloaded_file,
+                as_attachment=True,
+                download_name=os.path.basename(downloaded_file),
+                max_age=0,
+                conditional=False
+            )
+            
+            # Schedule deletion only after file has been sent
             @after_this_request
-            def remove_file(response):
-                delayed_file_delete(downloaded_file, delay_seconds=60)
+            def cleanup(response):
+                delayed_file_delete(downloaded_file, delay_seconds=300)  # 5 minutes
                 return response
+            
             return response
+            
     except Exception as e:
         if downloaded_file and os.path.exists(downloaded_file):
             try:
