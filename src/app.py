@@ -29,19 +29,29 @@ def is_ffmpeg_installed(ffmpeg_location=None):
             ffmpeg_location,
             '/usr/bin/ffmpeg',
             'ffmpeg',  # Let the system find it
-            '/app/.apt/usr/bin/ffmpeg'  # Railway.app specific path
+            '/app/.apt/usr/bin/ffmpeg',  # Railway.app specific path
+            '/usr/local/bin/ffmpeg',
+            os.path.join(os.getcwd(), 'ffmpeg'),
+            '/app/vendor/ffmpeg/ffmpeg'  # Another possible Railway.app path
         ]
         
         for loc in locations:
             if not loc:
                 continue
             try:
-                subprocess.run([loc, '-version'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                result = subprocess.run([loc, '-version'], 
+                                     check=True, 
+                                     stdout=subprocess.PIPE, 
+                                     stderr=subprocess.PIPE)
+                print(f"FFmpeg found at: {loc}")  # Debug logging
                 return loc
-            except Exception:
+            except Exception as e:
+                print(f"Failed to find FFmpeg at {loc}: {str(e)}")  # Debug logging
                 continue
+        print("No FFmpeg installation found")  # Debug logging
         return False
-    except Exception:
+    except Exception as e:
+        print(f"Error checking FFmpeg: {str(e)}")  # Debug logging
         return False
 
 def get_available_formats(url):
