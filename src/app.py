@@ -267,7 +267,7 @@ def download():
             # Schedule deletion only after file has been sent
             @after_this_request
             def cleanup(response):
-                delayed_file_delete(downloaded_file, delay_seconds=300)  # 5 minutes
+                delayed_file_delete(downloaded_file, delay_seconds=600)  # 5 minutes
                 return response
             
             return response
