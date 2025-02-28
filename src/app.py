@@ -52,7 +52,7 @@ def get_available_formats(url):
         'quiet': True,
         'no_warnings': True,
         'skip_download': True,
-        'cookiesfrombrowser': ('chrome',),  # Use Chrome cookies
+        'cookiefile': '/app/cookies.txt',  # Use cookies file instead of browser
     }
     
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -218,7 +218,7 @@ def download():
         'no_warnings': False,
         'ffmpeg_location': ffmpeg_path,
         'postprocessors': postprocessors,
-        'cookiesfrombrowser': ('chrome',),  # Use Chrome cookies
+        'cookiefile': '/app/cookies.txt',  # Use cookies file instead of browser
     }
     
     downloaded_file = None
