@@ -24,61 +24,14 @@ def sanitize_filename(title):
 def is_ffmpeg_installed(ffmpeg_location=None):
     """Check if ffmpeg is installed and accessible."""
     try:
-        # Try multiple possible ffmpeg locations
-        locations = [
-            ffmpeg_location,
-            '/usr/bin/ffmpeg',
-            'ffmpeg',
-            '/app/.apt/usr/bin/ffmpeg',
-            '/usr/local/bin/ffmpeg',
-            os.path.join(os.getcwd(), 'ffmpeg'),
-            '/app/vendor/ffmpeg/ffmpeg',
-            '/app/.apt/ffmpeg',
-            '/usr/bin/avconv',  # Alternative to ffmpeg
-        ]
-        
-        # Debug: Print current directory and PATH
-        print(f"Current directory: {os.getcwd()}")
-        print(f"PATH: {os.environ.get('PATH', 'Not set')}")
-        
-        for loc in locations:
-            if not loc:
-                continue
-            try:
-                # Try to find ffmpeg without executing it
-                if os.path.exists(loc):
-                    print(f"Found ffmpeg at: {loc}")
-                    return loc
-                    
-                # Try executing it
-                result = subprocess.run([loc, '-version'], 
-                                     check=True, 
-                                     stdout=subprocess.PIPE, 
-                                     stderr=subprocess.PIPE,
-                                     timeout=5)  # Add timeout
-                print(f"FFmpeg found and working at: {loc}")
-                print(f"FFmpeg version output: {result.stdout.decode()[:100]}...")  # Print first 100 chars
-                return loc
-            except Exception as e:
-                print(f"Failed to find/run FFmpeg at {loc}: {str(e)}")
-                continue
-                
-        # Try to find ffmpeg in PATH
-        try:
-            result = subprocess.run(['which', 'ffmpeg'], 
-                                 check=True, 
-                                 stdout=subprocess.PIPE, 
-                                 stderr=subprocess.PIPE)
-            ffmpeg_path = result.stdout.decode().strip()
-            print(f"Found ffmpeg in PATH at: {ffmpeg_path}")
-            return ffmpeg_path
-        except Exception as e:
-            print(f"Failed to find ffmpeg in PATH: {str(e)}")
-            
-        print("No FFmpeg installation found")
+        # Simplified location check
+        if subprocess.run(['ffmpeg', '-version'], 
+                        stdout=subprocess.PIPE, 
+                        stderr=subprocess.PIPE).returncode == 0:
+            return 'ffmpeg'
         return False
     except Exception as e:
-        print(f"Error checking FFmpeg: {str(e)}")
+        print(f"FFmpeg check error: {e}")
         return False
 
 def get_available_formats(url):
@@ -288,9 +241,16 @@ def download():
         return render_template('index.html', error=str(e))
 
 def init_app():
+    """Initialize the application and verify dependencies."""
     if not os.path.exists(DOWNLOAD_FOLDER):
         os.makedirs(DOWNLOAD_FOLDER)
     cleanup_old_files()
+    
+    # Verify FFmpeg installation
+    if not is_ffmpeg_installed():
+        print("WARNING: FFmpeg not found. Only non-merged formats will be available.")
+    else:
+        print("FFmpeg found and working.")
 
 init_app()
 
