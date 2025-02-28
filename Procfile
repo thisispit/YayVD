@@ -1,1 +1,0 @@
-web: which ffmpeg && ffmpeg -version && gunicorn src.app:app
