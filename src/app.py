@@ -188,22 +188,28 @@ def download():
     format_id = request.form['format_id']
     video_title = request.form['video_title']
     
+    # Clean up old files (e.g., older than 30 minutes)
     cleanup_old_files()
     
-    # Check cache for a recent download
+    # Check cache for a recent download (within 60 seconds)
     cache_key = (youtube_url, format_id)
     if cache_key in download_cache:
         cached = download_cache[cache_key]
         if os.path.exists(cached['file']) and (datetime.now() - cached['time']).total_seconds() < 60:
             print("Serving cached file")
-            return send_file(cached['file'], as_attachment=True, download_name=os.path.basename(cached['file']))
+            return send_file(
+                cached['file'],
+                as_attachment=True,
+                download_name=os.path.basename(cached['file']),
+                conditional=True  # Enables efficient streaming and HTTP Range requests
+            )
     
     sanitized_title = sanitize_filename(video_title)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_filename = f"{sanitized_title}_{timestamp}.%(ext)s"
     output_path = os.path.join(DOWNLOAD_FOLDER, output_filename)
     
-    # Build postprocessors. For merged formats, check for ffmpeg.
+    # Build postprocessors. For merged formats (which require FFmpeg) check its availability.
     postprocessors = [{
         'key': 'FFmpegMetadata',
         'add_metadata': True,
@@ -242,7 +248,7 @@ def download():
             info = ydl.extract_info(youtube_url, download=True)
             downloaded_file = ydl.prepare_filename(info)
             
-            # For merged formats, the actual file extension might change.
+            # For merged formats, the final file may have a different extension.
             if not os.path.exists(downloaded_file):
                 base = os.path.splitext(downloaded_file)[0]
                 for ext in ['.mp4', '.webm', '.mkv', '.m4a', '.mp3']:
@@ -256,22 +262,15 @@ def download():
             
             download_cache[cache_key] = {'file': downloaded_file, 'time': datetime.now()}
             
-            response = send_file(
+            # Schedule deletion after a longer delay (30 minutes) to allow ample time for download
+            delayed_file_delete(downloaded_file, delay_seconds=1800)
+            
+            return send_file(
                 downloaded_file,
                 as_attachment=True,
                 download_name=os.path.basename(downloaded_file),
-                max_age=0,
-                conditional=False
+                conditional=True  # This streams the file using the server's efficient file wrapper
             )
-            
-            # Schedule deletion only after file has been sent
-            @after_this_request
-            def cleanup(response):
-                delayed_file_delete(downloaded_file, delay_seconds=600)  # 5 minutes
-                return response
-            
-            return response
-            
     except Exception as e:
         if downloaded_file and os.path.exists(downloaded_file):
             try:
@@ -279,6 +278,7 @@ def download():
             except:
                 pass
         return render_template('index.html', error=str(e))
+
 
 def init_app():
     """Initialize the application and verify dependencies."""
