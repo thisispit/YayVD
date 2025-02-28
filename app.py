@@ -5,28 +5,50 @@ from datetime import datetime, timedelta
 import re
 import threading
 import time
+import subprocess
 
 app = Flask(__name__)
 
-DOWNLOAD_FOLDER = '/home/YOUR_USERNAME/yay/downloads'
+DOWNLOAD_FOLDER = 'downloads'
 if not os.path.exists(DOWNLOAD_FOLDER):
     os.makedirs(DOWNLOAD_FOLDER)
 
+# Store deletion jobs and cache downloaded files
 deletion_queue = {}
 download_cache = {}
 
 def sanitize_filename(title):
+    """Remove invalid characters from filename."""
     return re.sub(r'[\\/*?:"<>|]', "", title)
 
-def is_ffmpeg_available():
+def is_ffmpeg_installed(ffmpeg_location=None):
+    """Check if ffmpeg is installed and accessible."""
     try:
-        import subprocess
-        subprocess.run(['ffmpeg', '-version'], capture_output=True)
-        return True
-    except:
+        # Try multiple possible ffmpeg locations
+        locations = [
+            ffmpeg_location,
+            '/usr/bin/ffmpeg',
+            'ffmpeg',  # Let the system find it
+            '/app/.apt/usr/bin/ffmpeg'  # Railway.app specific path
+        ]
+        
+        for loc in locations:
+            if not loc:
+                continue
+            try:
+                subprocess.run([loc, '-version'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return loc
+            except Exception:
+                continue
+        return False
+    except Exception:
         return False
 
 def get_available_formats(url):
+    """
+    Retrieve available formats from the video.
+    Returns both muxed formats (already combined) and merging options.
+    """
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
@@ -37,6 +59,7 @@ def get_available_formats(url):
         info = ydl.extract_info(url, download=False)
         formats = []
         
+        # Add muxed formats (combined audio and video)
         for f in info['formats']:
             if f.get('vcodec') != 'none' and f.get('acodec') != 'none':
                 if not f.get('height') and not f.get('width'):
@@ -54,10 +77,46 @@ def get_available_formats(url):
                 }
                 formats.append(format_info)
         
-        formats = sorted(formats, 
-                        key=lambda x: int(x['resolution'].replace('p', '')) if x['resolution'].replace('p', '').isdigit() else 0, 
-                        reverse=True)
+        # Add merging options (which require ffmpeg)
+        merged_options = [
+            {
+                'format_id': 'bestvideo+bestaudio/best',
+                'ext': 'mp4',
+                'resolution': 'Best quality',
+                'filesize': 0,
+                'type': 'Merged'
+            },
+            {
+                'format_id': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]',
+                'ext': 'mp4',
+                'resolution': 'Best MP4',
+                'filesize': 0,
+                'type': 'Merged'
+            },
+            {
+                'format_id': 'best[height<=1080]',
+                'ext': 'mp4',
+                'resolution': 'Up to 1080p',
+                'filesize': 0,
+                'type': 'Merged'
+            }
+        ]
+        formats.extend(merged_options)
         
+        # Custom sort: prioritize merged options with high artificial quality scores.
+        def sort_key(fmt):
+            if fmt['type'] == 'Merged':
+                mapping = {'Best quality': 10000, 'Best MP4': 10000, 'Up to 1080p': 1080}
+                return mapping.get(fmt['resolution'], 10000)
+            else:
+                try:
+                    return int(fmt['resolution'].replace('p', ''))
+                except:
+                    return 0
+        
+        formats = sorted(formats, key=sort_key, reverse=True)
+        
+        # Remove duplicate resolutions (keep first occurrence)
         seen = set()
         unique_formats = []
         for fmt in formats:
@@ -68,6 +127,7 @@ def get_available_formats(url):
         return unique_formats, info['title']
 
 def delayed_file_delete(filepath, delay_seconds=60):
+    """Delete file after a delay (and remove it from cache)."""
     def delete_job():
         time.sleep(delay_seconds)
         try:
@@ -88,6 +148,7 @@ def delayed_file_delete(filepath, delay_seconds=60):
     return t
 
 def cleanup_old_files(max_age_minutes=30):
+    """Delete files older than max_age_minutes from the downloads folder."""
     now = datetime.now()
     for filename in os.listdir(DOWNLOAD_FOLDER):
         path = os.path.join(DOWNLOAD_FOLDER, filename)
@@ -107,10 +168,7 @@ def index():
         youtube_url = request.form['youtube_url']
         try:
             formats, video_title = get_available_formats(youtube_url)
-            return render_template('select_format.html', 
-                                formats=formats, 
-                                youtube_url=youtube_url, 
-                                video_title=video_title)
+            return render_template('select_format.html', formats=formats, youtube_url=youtube_url, video_title=video_title)
         except Exception as e:
             return render_template('index.html', error=str(e))
     return render_template('index.html')
@@ -123,6 +181,7 @@ def download():
     
     cleanup_old_files()
     
+    # Check cache for a recent download
     cache_key = (youtube_url, format_id)
     if cache_key in download_cache:
         cached = download_cache[cache_key]
@@ -135,18 +194,30 @@ def download():
     output_filename = f"{sanitized_title}_{timestamp}.%(ext)s"
     output_path = os.path.join(DOWNLOAD_FOLDER, output_filename)
     
+    # Build postprocessors. For merged formats, check for ffmpeg.
     postprocessors = [{
         'key': 'FFmpegMetadata',
         'add_metadata': True,
     }]
+    if ('+' in format_id) or ('bestvideo' in format_id and 'bestaudio' in format_id):
+        # Check if ffmpeg is installed before proceeding.
+        if not is_ffmpeg_installed():
+            return render_template('index.html', error="FFmpeg is not installed. Please select a muxed format or install FFmpeg.")
+        postprocessors.insert(0, {'key': 'FFmpegMerger'})
     
+    # Update ffmpeg location in ydl_opts
+    ffmpeg_path = is_ffmpeg_installed()
+    if not ffmpeg_path:
+        return render_template('index.html', error="FFmpeg is not accessible")
+        
     ydl_opts = {
         'format': format_id,
         'outtmpl': output_path,
         'noplaylist': True,
         'quiet': False,
         'no_warnings': False,
-        'postprocessors': [postprocessors]
+        'ffmpeg_location': ffmpeg_path,
+        'postprocessors': postprocessors,
     }
     
     downloaded_file = None
@@ -155,6 +226,7 @@ def download():
             info = ydl.extract_info(youtube_url, download=True)
             downloaded_file = ydl.prepare_filename(info)
             
+            # For merged formats, the actual file extension might change.
             if not os.path.exists(downloaded_file):
                 base = os.path.splitext(downloaded_file)[0]
                 for ext in ['.mp4', '.webm', '.mkv', '.m4a', '.mp3']:
@@ -186,4 +258,5 @@ def init_app():
 init_app()
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
