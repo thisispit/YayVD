@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_file, after_this_request
+from flask import Flask, render_template, request, send_file
 import yt_dlp
 import os
 from datetime import datetime, timedelta
@@ -13,8 +13,7 @@ app = Flask(__name__)
 DOWNLOAD_FOLDER = '/app/downloads'
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
-# Store deletion jobs and cache downloaded files
-deletion_queue = {}
+# Store cache downloaded files
 download_cache = {}
 
 def sanitize_filename(title):
@@ -132,42 +131,6 @@ def get_available_formats(url):
                 
         return unique_formats, info['title']
 
-def delayed_file_delete(filepath, delay_seconds=300):  # Increased to 5 minutes
-    """Delete file after a delay (and remove it from cache)."""
-    def delete_job():
-        time.sleep(delay_seconds)
-        try:
-            if os.path.exists(filepath):
-                os.remove(filepath)
-                print(f"Successfully deleted: {filepath} after {delay_seconds} seconds")
-            if filepath in deletion_queue:
-                del deletion_queue[filepath]
-            keys_to_delete = [key for key, value in download_cache.items() if value['file'] == filepath]
-            for key in keys_to_delete:
-                del download_cache[key]
-        except Exception as e:
-            print(f"Error deleting file {filepath}: {e}")
-    t = threading.Thread(target=delete_job)
-    t.daemon = True
-    t.start()
-    deletion_queue[filepath] = t
-    return t
-
-def cleanup_old_files(max_age_minutes=30):
-    """Delete files older than max_age_minutes from the downloads folder."""
-    now = datetime.now()
-    for filename in os.listdir(DOWNLOAD_FOLDER):
-        path = os.path.join(DOWNLOAD_FOLDER, filename)
-        try:
-            if path in deletion_queue:
-                continue
-            file_time = datetime.fromtimestamp(os.path.getctime(path))
-            if (now - file_time) > timedelta(minutes=max_age_minutes):
-                os.remove(path)
-                print(f"Cleaned up old file: {path}")
-        except Exception as e:
-            print(f"Error cleaning up file {filename}: {e}")
-
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
@@ -188,20 +151,17 @@ def download():
     format_id = request.form['format_id']
     video_title = request.form['video_title']
     
-    # Clean up old files (e.g., older than 30 minutes)
-    cleanup_old_files()
-    
-    # Check cache for a recent download (within 60 seconds)
+    # Check cache for a recent download
     cache_key = (youtube_url, format_id)
     if cache_key in download_cache:
         cached = download_cache[cache_key]
-        if os.path.exists(cached['file']) and (datetime.now() - cached['time']).total_seconds() < 60:
+        if os.path.exists(cached['file']):
             print("Serving cached file")
             return send_file(
                 cached['file'],
                 as_attachment=True,
                 download_name=os.path.basename(cached['file']),
-                conditional=True  # Enables efficient streaming and HTTP Range requests
+                conditional=True
             )
     
     sanitized_title = sanitize_filename(video_title)
@@ -262,9 +222,7 @@ def download():
             
             download_cache[cache_key] = {'file': downloaded_file, 'time': datetime.now()}
             
-            # Schedule deletion after a longer delay (30 minutes) to allow ample time for download
-            delayed_file_delete(downloaded_file, delay_seconds=1800)
-            
+            # Remove deletion scheduling
             return send_file(
                 downloaded_file,
                 as_attachment=True,
@@ -286,7 +244,7 @@ def init_app():
     os.chmod(DOWNLOAD_FOLDER, 0o777)  # Make directory writable
     print(f"Download directory: {os.path.abspath(DOWNLOAD_FOLDER)}")
     print(f"Current working directory: {os.getcwd()}")
-    cleanup_old_files()
+    
     ffmpeg_path = is_ffmpeg_installed()
     if not ffmpeg_path:
         print("WARNING: FFmpeg not found. Only non-merged formats will be available.")
