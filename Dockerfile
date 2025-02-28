@@ -4,9 +4,19 @@ FROM python:3.9-slim
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ffmpeg \
+    tzdata \
+    locales \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && ffmpeg -version
+
+# Set locale and timezone
+ENV TZ=UTC
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+RUN locale-gen en_US.UTF-8
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
 
 # Set working directory
 WORKDIR /app
