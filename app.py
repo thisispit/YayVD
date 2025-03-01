@@ -88,6 +88,8 @@ def get_available_formats(url):
         'skip_download': True,
         'writeinfojson': False,
         'youtube_include_dash_manifest': True,
+        'cookiesfrombrowser': ('chrome',),  # Try to use Chrome cookies
+        'no_check_certificates': True,
     }
     
     if FFMPEG_PATH:
@@ -293,6 +295,8 @@ def download():
         'quiet': False,
         'no_warnings': False,
         'merge_output_format': 'mp4',  # Force MP4 output
+        'cookiesfrombrowser': ('chrome',),  # Try to use Chrome cookies
+        'no_check_certificates': True,
     }
     
     # Add FFmpeg location if available
