@@ -1,6 +1,6 @@
 # README.md
 
-# YouTube Downloader
+# YouTube Video Downloader
 
 This is a Flask application that allows users to download videos from YouTube by providing a video URL. The application retrieves available video formats and enables users to select their preferred format for download.
 
@@ -46,10 +46,28 @@ youtube-downloader
    pip install -r requirements.txt
    ```
 
-4. Run the application:
-   ```
-   python src/app.py
-   ```
+## FFmpeg Setup for Windows Development
+
+1. Download FFmpeg from https://github.com/BtbN/FFmpeg-Builds/releases
+2. Extract the zip file
+3. Copy the `ffmpeg.exe` from the `bin` folder to one of these locations:
+   - `C:\ffmpeg\bin\ffmpeg.exe`
+   - The project root directory
+   - Add FFmpeg to your system PATH
+
+## Running the Application
+
+1. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+2. Run the application:
+```bash
+python src/app.py
+```
+
+The application will automatically detect FFmpeg from the standard locations.
 
 5. Open your browser and go to `http://127.0.0.1:5000` to access the application.
 

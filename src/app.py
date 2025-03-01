@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_file
+from flask import Flask, render_template, request, send_file, after_this_request
 import yt_dlp
 import os
 from datetime import datetime, timedelta
@@ -13,7 +13,7 @@ app = Flask(__name__)
 DOWNLOAD_FOLDER = '/app/downloads'
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
-# Store cache downloaded files
+# Store cache for downloaded files
 download_cache = {}
 
 def sanitize_filename(title):
@@ -23,17 +23,35 @@ def sanitize_filename(title):
 def is_ffmpeg_installed(ffmpeg_location=None):
     """Check if ffmpeg is installed and accessible."""
     try:
-        # Check environment variable first
-        env_ffmpeg = os.environ.get('FFMPEG_PATH', '/usr/bin/ffmpeg')
-        result = subprocess.run([env_ffmpeg, '-version'],
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE,
-                                timeout=5)
-        if result.returncode == 0:
-            print(f"FFmpeg found at: {env_ffmpeg}")
-            return env_ffmpeg
-        print(f"FFmpeg check failed with return code: {result.returncode}")
-        print(f"FFmpeg stderr: {result.stderr.decode()}")
+        # Check system-specific paths
+        if os.name == 'nt':  # Windows
+            possible_paths = [
+                r'C:\ffmpeg\bin\ffmpeg.exe',
+                'ffmpeg.exe',
+                os.path.join(os.getcwd(), 'ffmpeg.exe'),
+                os.environ.get('FFMPEG_PATH', '')
+            ]
+        else:  # Linux/Unix
+            possible_paths = [
+                '/usr/bin/ffmpeg',
+                'ffmpeg',
+                '/app/.apt/usr/bin/ffmpeg',
+                os.environ.get('FFMPEG_PATH', '')
+            ]
+        possible_paths = [p for p in possible_paths if p]
+        for path in possible_paths:
+            try:
+                result = subprocess.run([path, '-version'],
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE,
+                                     timeout=5)
+                if result.returncode == 0:
+                    print(f"FFmpeg found at: {path}")
+                    return path
+            except Exception as e:
+                print(f"Failed to run FFmpeg at {path}: {e}")
+                continue
+        print("No FFmpeg installation found")
         return False
     except Exception as e:
         print(f"FFmpeg check error: {e}")
@@ -48,7 +66,7 @@ def get_available_formats(url):
         'quiet': True,
         'no_warnings': True,
         'skip_download': True,
-        'cookiefile': '/app/cookies.txt',  # Use cookies file if needed
+        'cookiefile': '/app/cookies.txt',
         'no_check_certificate': True,
         'extract_flat': True,
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
@@ -131,6 +149,24 @@ def get_available_formats(url):
                 
         return unique_formats, info['title']
 
+def delayed_file_delete(filepath, delay_seconds=60):
+    """Delete file after a delay (and remove it from cache)."""
+    def delete_job():
+        time.sleep(delay_seconds)
+        try:
+            if os.path.exists(filepath):
+                os.remove(filepath)
+                print(f"Successfully deleted: {filepath} after {delay_seconds} seconds")
+            keys_to_delete = [key for key, value in download_cache.items() if value['file'] == filepath]
+            for key in keys_to_delete:
+                del download_cache[key]
+        except Exception as e:
+            print(f"Error deleting file {filepath}: {e}")
+    t = threading.Thread(target=delete_job)
+    t.daemon = True
+    t.start()
+    return t
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
@@ -169,7 +205,7 @@ def download():
     output_filename = f"{sanitized_title}_{timestamp}.%(ext)s"
     output_path = os.path.join(DOWNLOAD_FOLDER, output_filename)
     
-    # Build postprocessors. For merged formats (which require FFmpeg) check its availability.
+    # Build postprocessors. For merged formats, check for FFmpeg.
     postprocessors = [{
         'key': 'FFmpegMetadata',
         'add_metadata': True,
@@ -222,13 +258,20 @@ def download():
             
             download_cache[cache_key] = {'file': downloaded_file, 'time': datetime.now()}
             
-            # Remove deletion scheduling
-            return send_file(
+            # Create the response and schedule deletion after the response is sent.
+            response = send_file(
                 downloaded_file,
                 as_attachment=True,
                 download_name=os.path.basename(downloaded_file),
-                conditional=True  # This streams the file using the server's efficient file wrapper
+                conditional=True
             )
+            @after_this_request
+            def remove_file(response):
+                # Schedule deletion after 60 seconds
+                delayed_file_delete(downloaded_file, delay_seconds=60)
+                return response
+            return response
+            
     except Exception as e:
         if downloaded_file and os.path.exists(downloaded_file):
             try:
@@ -237,11 +280,10 @@ def download():
                 pass
         return render_template('index.html', error=str(e))
 
-
 def init_app():
     """Initialize the application and verify dependencies."""
     os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
-    os.chmod(DOWNLOAD_FOLDER, 0o777)  # Make directory writable
+    os.chmod(DOWNLOAD_FOLDER, 0o777)
     print(f"Download directory: {os.path.abspath(DOWNLOAD_FOLDER)}")
     print(f"Current working directory: {os.getcwd()}")
     
