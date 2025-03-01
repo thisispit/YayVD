@@ -1,25 +1,31 @@
 FROM python:3.9-slim
 
-# Install FFmpeg and Firefox
+# Install FFmpeg, Firefox, and locales
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ffmpeg \
     firefox-esr \
+    locales \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && ffmpeg -version
+
+# Set up locale
+RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
+    locale-gen
+
+# Set environment variables
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
+ENV TZ UTC
 
 # Create Firefox profile and configure it
 RUN mkdir -p /root/.mozilla/firefox/profile.default && \
     echo '{"created": 1, "firstUse": null}' > /root/.mozilla/firefox/profile.default/times.json
 
-# Set locale and timezone
-ENV TZ=UTC
+# Set timezone
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-RUN locale-gen en_US.UTF-8
-ENV LANG en_US.UTF-8
-ENV LANGUAGE en_US:en
-ENV LC_ALL en_US.UTF-8
 
 # Set working directory
 WORKDIR /app
@@ -29,11 +35,11 @@ RUN mkdir -p /app/downloads && \
     chmod 777 /app/downloads
 
 # Install Python packages
-COPY requirements.txt .
+COPY requirements.txt . 
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code and cookies
-COPY . .
+COPY . . 
 COPY cookies.txt /app/cookies.txt
 
 # Verify FFmpeg and files
