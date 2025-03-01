@@ -36,9 +36,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Verify FFmpeg and files
-RUN ffmpeg -version && \
-    ls -la /app/youtube.com_cookies.txt
+# Verify FFmpeg installation
+RUN ffmpeg -version
 
 # Environment variables
 ENV PORT=8080

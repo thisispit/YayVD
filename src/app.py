@@ -66,19 +66,25 @@ def get_yt_options():
         'no_warnings': True,
         'extract_flat': False,
         'format': 'best',
+        'no_check_certificate': True,
+        'socket_timeout': 30,
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-us,en;q=0.5',
+            'Sec-Fetch-Mode': 'navigate',
+        }
     }
     
-    if os.environ.get('YT_AUTH_REQUIRED') == 'true':
-        # Use environment variable for cookies if provided
-        cookies_str = os.environ.get('YT_COOKIES', '')
-        if cookies_str:
-            try:
-                cookies_file = os.path.join(DOWNLOAD_FOLDER, '.cookies.txt')
-                with open(cookies_file, 'w') as f:
-                    f.write(b64decode(cookies_str).decode())
-                base_opts['cookiefile'] = cookies_file
-            except Exception as e:
-                print(f"Failed to process cookies: {e}")
+    if os.environ.get('YT_AUTH_REQUIRED') == 'true' and os.environ.get('YT_COOKIES'):
+        try:
+            cookies_file = os.path.join(DOWNLOAD_FOLDER, '.cookies.txt')
+            with open(cookies_file, 'w') as f:
+                f.write(b64decode(os.environ['YT_COOKIES']).decode())
+            base_opts['cookiefile'] = cookies_file
+        except Exception as e:
+            print(f"Failed to process cookies: {e}")
     
     return base_opts
 
