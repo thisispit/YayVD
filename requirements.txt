@@ -2,3 +2,5 @@ Flask==3.0.0
 yt-dlp==2024.3.10
 gunicorn==21.2.0
 pytube==15.0.0
+youtube-dl-server==0.4.1
+requests==2.31.0
