@@ -1,9 +1,16 @@
 FROM python:3.9-slim
 
-# Install FFmpeg and dependencies
+# Install FFmpeg, Chrome, and other dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ffmpeg \
+    wget \
+    gnupg \
+    && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
+    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+    google-chrome-stable \
     tzdata \
     locales \
     && apt-get clean \
@@ -41,6 +48,7 @@ RUN ffmpeg -version && \
 ENV PORT=8080
 ENV FFMPEG_PATH=/usr/bin/ffmpeg
 ENV DOWNLOAD_FOLDER=/app/downloads
+ENV CHROME_PATH=/usr/bin/google-chrome
 
 # Expose port
 EXPOSE 8080
