@@ -1,10 +1,9 @@
 FROM python:3.9-slim
 
-# Install FFmpeg, Firefox, and locales
+# Install FFmpeg and locales
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ffmpeg \
-    firefox-esr \
     locales \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
@@ -20,10 +19,6 @@ ENV LANGUAGE en_US:en
 ENV LC_ALL en_US.UTF-8
 ENV TZ UTC
 
-# Create Firefox profile and configure it
-RUN mkdir -p /root/.mozilla/firefox/profile.default && \
-    echo '{"created": 1, "firstUse": null}' > /root/.mozilla/firefox/profile.default/times.json
-
 # Set timezone
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
@@ -38,20 +33,18 @@ RUN mkdir -p /app/downloads && \
 COPY requirements.txt . 
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code and cookies
-COPY . . 
-COPY cookies.txt /app/cookies.txt
+# Copy application code and cookie file
+COPY . .
+COPY youtube.com_cookies.txt /app/youtube.com_cookies.txt
 
 # Verify FFmpeg and files
 RUN ffmpeg -version && \
-    ls -la /app/cookies.txt
+    ls -la /app/youtube.com_cookies.txt
 
 # Environment variables
 ENV PORT=8080
 ENV FFMPEG_PATH=/usr/bin/ffmpeg
 ENV DOWNLOAD_FOLDER=/app/downloads
-ENV MOZ_HEADLESS=1
-ENV PATH="/usr/lib/firefox-esr:${PATH}"
 
 # Expose port
 EXPOSE 8080

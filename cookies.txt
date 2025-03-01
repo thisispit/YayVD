@@ -1,9 +1,0 @@
-# Netscape HTTP Cookie File
-# https://curl.haxx.se/rfc/cookie_spec.html
-# This is a generated file!  Do not edit.
-
-.youtube.com	TRUE	/	FALSE	1735689600	CONSENT	YES+cb
-.youtube.com	TRUE	/	FALSE	1735689600	VISITOR_INFO1_LIVE	your_visitor_info_here
-.youtube.com	TRUE	/	FALSE	1735689600	LOGIN_INFO	your_login_info_here
-.youtube.com	TRUE	/	FALSE	1735689600	SID	your_sid_here
-.youtube.com	TRUE	/	FALSE	1735689600	HSID	your_hsid_here
