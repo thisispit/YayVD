@@ -8,6 +8,8 @@ import logging
 import threading
 import time
 from functools import lru_cache
+from pytube import YouTube
+import json
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -19,341 +21,168 @@ DOWNLOAD_FOLDER = 'downloads'
 if not os.path.exists(DOWNLOAD_FOLDER):
     os.makedirs(DOWNLOAD_FOLDER)
 
-# Try multiple possible FFmpeg locations
-POSSIBLE_FFMPEG_PATHS = [
-    os.path.join(os.getcwd(), 'ffmpeg', 'bin', 'ffmpeg.exe'),  # Local ffmpeg folder
-    os.path.join(os.getcwd(), 'ffmpeg.exe'),                   # Root folder
-    shutil.which('ffmpeg'),                                    # System PATH
-    r"C:\ffmpeg\bin\ffmpeg.exe",                              # Common install location
-]
-
-def find_ffmpeg():
-    for path in POSSIBLE_FFMPEG_PATHS:
-        if path and os.path.exists(path):
-            logger.info(f"Found FFmpeg at: {path}")
-            return path
-    logger.warning("FFmpeg not found in any standard location!")
-    return None
-
-FFMPEG_PATH = find_ffmpeg()
-FFMPEG_AVAILABLE = FFMPEG_PATH is not None
-
-logger.info(f"FFmpeg available: {FFMPEG_AVAILABLE}")
-if FFMPEG_AVAILABLE:
-    logger.info(f"Using FFmpeg from: {FFMPEG_PATH}")
-
-def sanitize_filename(title):
-    """Remove invalid characters from filename"""
-    return re.sub(r'[\\/*?:"<>|]', "", title)
-
-def get_resolution_value(resolution_str):
-    """Convert resolution string to numeric value for sorting"""
+def get_video_info_pytube(url):
     try:
-        if 'Best' in resolution_str:
-            return float('inf')
-        # Extract numbers from the resolution string
-        numbers = re.findall(r'\d+', resolution_str)
-        if numbers:
-            # Use the first number found (height)
-            return int(numbers[0])
-        return 0
-    except Exception:
-        return 0
-
-def get_format_priority(format_info):
-    """Calculate priority score for format sorting"""
-    # Base priority for complete vs video-only formats
-    base_priority = 1000 if not format_info.get('is_video_only', False) else 0
-    
-    # Add resolution-based priority
-    if 'Best quality' in format_info.get('resolution', ''):
-        resolution_priority = 500
-    elif '4K' in format_info.get('resolution', ''):
-        resolution_priority = 400
-    elif '2K' in format_info.get('resolution', ''):
-        resolution_priority = 300
-    elif 'Full HD' in format_info.get('resolution', ''):
-        resolution_priority = 200
-    elif 'HD' in format_info.get('resolution', ''):
-        resolution_priority = 100
-    else:
-        resolution_priority = get_resolution_value(format_info.get('resolution', '0')) // 10
-    
-    return base_priority + resolution_priority
+        yt = YouTube(url)
+        streams = yt.streams.filter(progressive=True).order_by('resolution').desc()
+        formats = []
+        
+        # Add streams to formats list
+        for stream in streams:
+            format_info = {
+                'format_id': f"{stream.itag}",
+                'ext': stream.subtype,
+                'resolution': stream.resolution or 'Auto',
+                'filesize': stream.filesize,
+                'type': f"Video + Audio ({stream.subtype.upper()})",
+                'requires_ffmpeg': False,
+                'quality_label': stream.resolution or 'Auto'
+            }
+            formats.append(format_info)
+        
+        return formats, yt.title
+    except Exception as e:
+        logger.error(f"Pytube error: {str(e)}")
+        return None, None
 
 def get_available_formats(url):
-    ydl_opts = {
-        'quiet': True,
-        'no_warnings': True,
-        'skip_download': True,
-        'writeinfojson': False,
-        'format': 'best',
-        'extractor_retries': 3,
-        'socket_timeout': 30,
-        'extract_flat': False,
-        'youtube_include_dash_manifest': False,
-        'extractor_args': {
-            'youtube': {
-                'innertube_client': ['android'],
-                'player_client': ['android'],
-            }
-        },
-        'http_headers': {
-            'User-Agent': 'com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip',
-            'Accept': '*/*',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate',
-            'Origin': 'https://www.youtube.com',
-            'Referer': 'https://www.youtube.com/'
-        }
-    }
-    
+    # First try with yt-dlp
     try:
+        ydl_opts = {
+            'quiet': True,
+            'format': 'best',
+            'extract_flat': True,
+            'force_generic_extractor': False,
+            'no_warnings': True,
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+        }
+        
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            try:
-                # First try with default options
-                info = ydl.extract_info(url, download=False)
+            info = ydl.extract_info(url, download=False)
+            if info and 'formats' in info:
+                formats = []
+                seen_qualities = set()
                 
-                if info is None:
-                    # Try with web client if android fails
-                    ydl_opts.update({
-                        'extractor_args': {
-                            'youtube': {
-                                'innertube_client': ['web'],
-                                'player_client': ['web'],
+                for f in info['formats']:
+                    if f.get('height') and f.get('acodec') != 'none' and f.get('vcodec') != 'none':
+                        quality = f"{f.get('height')}p"
+                        if quality not in seen_qualities:
+                            seen_qualities.add(quality)
+                            format_info = {
+                                'format_id': f['format_id'],
+                                'ext': f.get('ext', 'mp4'),
+                                'resolution': quality,
+                                'filesize': f.get('filesize', 0),
+                                'type': f"Video + Audio ({f.get('ext', 'mp4').upper()})",
+                                'requires_ffmpeg': False,
+                                'quality_label': quality
                             }
-                        },
-                        'http_headers': {
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
-                        }
-                    })
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl2:
-                        info = ydl2.extract_info(url, download=False)
+                            formats.append(format_info)
                 
-                if info is None:
-                    # Final attempt with minimal options
-                    ydl_opts = {
-                        'quiet': True,
-                        'format': 'best',
-                        'no_warnings': True
-                    }
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl3:
-                        info = ydl3.extract_info(url, download=False)
-                
-                if info is None:
-                    return [], "Could not extract video information. Please check the URL and try again."
-                
-                # Always include best format as fallback
-                formats = [{
-                    'format_id': 'best',
-                    'ext': 'mp4',
-                    'resolution': 'Auto',
-                    'filesize': 0,
-                    'type': 'Auto Quality',
-                    'requires_ffmpeg': False,
-                    'quality_label': 'Auto'
-                }]
-                
-                # Add available formats if present
-                if 'formats' in info:
-                    seen_qualities = set()
-                    for f in info['formats']:
-                        if f.get('height') and f.get('acodec') != 'none' and f.get('vcodec') != 'none':
-                            quality = f"{f.get('height')}p"
-                            if quality not in seen_qualities:
-                                seen_qualities.add(quality)
-                                format_info = {
-                                    'format_id': f['format_id'],
-                                    'ext': f.get('ext', 'mp4'),
-                                    'resolution': quality,
-                                    'filesize': f.get('filesize', 0),
-                                    'type': f"Video + Audio ({f.get('ext', 'mp4').upper()})",
-                                    'requires_ffmpeg': False,
-                                    'quality_label': quality
-                                }
-                                formats.append(format_info)
-                
-                # Sort formats by resolution
-                formats.sort(key=lambda x: int(x['resolution'].replace('p', '')) if x['resolution'] != 'Auto' else 0, reverse=True)
-                
-                return formats, info.get('title', 'Video')
-            except Exception as e:
-                logger.error(f"Error extracting formats: {str(e)}")
-                # Return basic format as fallback
-                return [{
-                    'format_id': 'best',
-                    'ext': 'mp4',
-                    'resolution': 'Auto',
-                    'filesize': 0,
-                    'type': 'Auto Quality',
-                    'requires_ffmpeg': False,
-                    'quality_label': 'Auto'
-                }], "Video"
+                if formats:
+                    formats.sort(key=lambda x: int(x['resolution'].replace('p', '')) if x['resolution'] != 'Auto' else 0, reverse=True)
+                    return formats, info.get('title', 'Video')
+    
     except Exception as e:
-        logger.error(f"YoutubeDL error: {str(e)}")
-        return [], f"Error initializing downloader: {str(e)}"
+        logger.error(f"yt-dlp error: {str(e)}")
+    
+    # If yt-dlp fails, try pytube
+    formats, title = get_video_info_pytube(url)
+    if formats:
+        return formats, title
+    
+    # If both fail, return basic format
+    return [{
+        'format_id': 'best',
+        'ext': 'mp4',
+        'resolution': 'Auto',
+        'filesize': 0,
+        'type': 'Auto Quality',
+        'requires_ffmpeg': False,
+        'quality_label': 'Auto'
+    }], 'Video'
 
-# Add cache and file tracking
-CACHE_TIMEOUT = 120  # 2 minutes
-downloaded_files = {}  # Track files with their download times
-
-def cleanup_old_files():
-    """Background thread to clean up old downloaded files"""
-    while True:
-        current_time = datetime.now()
-        files_to_remove = []
+def download_with_pytube(url, download_path):
+    try:
+        yt = YouTube(url)
+        stream = yt.streams.get_highest_resolution()
+        if not stream:
+            return None
         
-        # Check all tracked files
-        for filepath, download_time in downloaded_files.items():
-            if current_time - download_time > timedelta(seconds=CACHE_TIMEOUT):
-                try:
-                    if os.path.exists(filepath):
-                        os.remove(filepath)
-                        logger.info(f"Cleaned up expired file: {filepath}")
-                except Exception as e:
-                    logger.error(f"Error cleaning up file {filepath}: {str(e)}")
-                files_to_remove.append(filepath)
-        
-        # Remove cleaned up files from tracking
-        for filepath in files_to_remove:
-            downloaded_files.pop(filepath, None)
-        
-        time.sleep(30)  # Check every 30 seconds
-
-# Start cleanup thread
-cleanup_thread = threading.Thread(target=cleanup_old_files, daemon=True)
-cleanup_thread.start()
-
-@lru_cache(maxsize=32)
-def get_video_info(url):
-    """Cache video format information"""
-    formats, title = get_available_formats(url)
-    return formats, title
+        return stream.download(output_path=download_path)
+    except Exception as e:
+        logger.error(f"Pytube download error: {str(e)}")
+        return None
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
-        youtube_url = request.form['youtube_url']
         try:
-            formats, video_title = get_video_info(youtube_url)  # Use cached function
-            return render_template('select_format.html', 
-                                formats=formats, 
-                                youtube_url=youtube_url, 
-                                video_title=video_title,
-                                ffmpeg_available=FFMPEG_AVAILABLE,  # Pass as direct variable
-                                ffmpeg_path=FFMPEG_PATH)  # Pass FFmpeg path for debugging
+            url = request.form.get('url', '').strip()
+            if not url:
+                return render_template('index.html', error="Please enter a URL")
+            
+            formats, title = get_available_formats(url)
+            return render_template('index.html', formats=formats, video_title=title, url=url)
         except Exception as e:
+            logger.error(f"Error: {str(e)}")
             return render_template('index.html', error=str(e))
+    
     return render_template('index.html')
 
 @app.route('/download', methods=['POST'])
 def download():
     try:
         url = request.form.get('url')
-        format_id = request.form.get('format', 'best')  # Default to 'best' if not specified
+        format_id = request.form.get('format', 'best')
         
         if not url:
             return render_template('index.html', error="Please provide a valid URL")
         
-        ydl_opts = {
-            'format': format_id,
-            'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(title)s.%(ext)s'),
-            'extractor_retries': 3,
-            'socket_timeout': 30,
-            'quiet': False,
-            'no_warnings': False,
-            'merge_output_format': 'mp4',
-            'youtube_include_dash_manifest': False,
-            'extractor_args': {
-                'youtube': {
-                    'innertube_client': ['android'],
-                    'player_client': ['android'],
-                }
-            },
-            'http_headers': {
-                'User-Agent': 'com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip',
-                'Accept': '*/*',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate',
-                'Origin': 'https://www.youtube.com',
-                'Referer': 'https://www.youtube.com/'
-            }
-        }
-        
-        if FFMPEG_PATH:
-            ydl_opts['ffmpeg_location'] = FFMPEG_PATH
-        
+        # First try yt-dlp
         try:
-            # First try with default options
+            ydl_opts = {
+                'format': format_id,
+                'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(title)s.%(ext)s'),
+                'quiet': False,
+                'no_warnings': True,
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+            }
+            
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                try:
-                    info = ydl.extract_info(url, download=True)
-                    
-                    if info is None:
-                        # Try with web client if android fails
-                        ydl_opts.update({
-                            'format': 'best',  # Fallback to best format
-                            'extractor_args': {
-                                'youtube': {
-                                    'innertube_client': ['web'],
-                                    'player_client': ['web'],
-                                }
-                            },
-                            'http_headers': {
-                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
-                            }
-                        })
-                        with yt_dlp.YoutubeDL(ydl_opts) as ydl2:
-                            info = ydl2.extract_info(url, download=True)
-                    
-                    if info is None:
-                        # Final attempt with minimal options
-                        ydl_opts = {
-                            'format': 'best',
-                            'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(title)s.%(ext)s'),
-                            'quiet': True,
-                            'no_warnings': True
-                        }
-                        with yt_dlp.YoutubeDL(ydl_opts) as ydl3:
-                            info = ydl3.extract_info(url, download=True)
-                    
-                    if info is None:
-                        return render_template('index.html', error="Could not download video. Please check the URL and try again.")
-                    
+                info = ydl.extract_info(url, download=True)
+                if info:
                     downloaded_file = ydl.prepare_filename(info)
-                    
-                    if not os.path.exists(downloaded_file):
-                        # Try with different extension if file not found
-                        base_path = os.path.splitext(downloaded_file)[0]
-                        for ext in ['.mp4', '.mkv', '.webm']:
-                            alt_file = base_path + ext
-                            if os.path.exists(alt_file):
-                                downloaded_file = alt_file
-                                break
-                    
-                    if not os.path.exists(downloaded_file):
-                        return render_template('index.html', error="Download completed but file not found. Please try again.")
-                    
-                    # Store in cache
-                    downloaded_files[downloaded_file] = datetime.now()
-                    
-                    return send_file(
-                        downloaded_file,
-                        as_attachment=True,
-                        download_name=os.path.basename(downloaded_file),
-                        mimetype='video/mp4'
-                    )
-                except Exception as e:
-                    logger.error(f"Error during download: {str(e)}")
-                    return render_template('index.html', error=f"Download error: {str(e)}")
+                    if os.path.exists(downloaded_file):
+                        return send_file(
+                            downloaded_file,
+                            as_attachment=True,
+                            download_name=os.path.basename(downloaded_file),
+                            mimetype='video/mp4'
+                        )
         except Exception as e:
-            logger.error(f"YoutubeDL error: {str(e)}")
-            return render_template('index.html', error=f"Downloader error: {str(e)}")
+            logger.error(f"yt-dlp download error: {str(e)}")
+        
+        # If yt-dlp fails, try pytube
+        downloaded_file = download_with_pytube(url, DOWNLOAD_FOLDER)
+        if downloaded_file and os.path.exists(downloaded_file):
+            return send_file(
+                downloaded_file,
+                as_attachment=True,
+                download_name=os.path.basename(downloaded_file),
+                mimetype='video/mp4'
+            )
+        
+        return render_template('index.html', error="Failed to download video. Please try again.")
+        
     except Exception as e:
         logger.error(f"General error: {str(e)}")
         return render_template('index.html', error=f"An error occurred: {str(e)}")
 
 if __name__ == '__main__':
-    # Use environment variable for port, defaulting to 10000
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)

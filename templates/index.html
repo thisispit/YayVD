@@ -30,6 +30,13 @@
             background-color: #ff0000;
             border-color: #ff0000;
         }
+        .format-card {
+            margin-bottom: 10px;
+            transition: transform 0.2s;
+        }
+        .format-card:hover {
+            transform: translateY(-5px);
+        }
     </style>
 </head>
 <body>
@@ -42,15 +49,54 @@
         </div>
         {% endif %}
         
+        {% if formats %}
+        <div class="mb-4">
+            <h2>Video: {{ video_title }}</h2>
+        </div>
+        
+        <div class="mb-4">
+            <h3>Select Format to Download:</h3>
+        </div>
+        
+        <div class="row">
+            {% for format in formats %}
+            <div class="col-md-6 mb-3">
+                <div class="card format-card">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ format.resolution }}</h5>
+                        <p class="card-text">
+                            Format: {{ format.ext }}<br>
+                            {% if format.filesize %}
+                            Size: {{ (format.filesize / 1024 / 1024) | round(2) }} MB
+                            {% else %}
+                            Size: Unknown
+                            {% endif %}
+                        </p>
+                        <form method="POST" action="{{ url_for('download') }}">
+                            <input type="hidden" name="url" value="{{ url }}">
+                            <input type="hidden" name="format" value="{{ format.format_id }}">
+                            <button type="submit" class="btn btn-danger">Download</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="mt-4">
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">Back</a>
+        </div>
+        {% else %}
         <form method="POST" action="{{ url_for('index') }}">
             <div class="mb-3">
-                <label for="youtube_url" class="form-label">YouTube Video URL:</label>
-                <input type="text" class="form-control" id="youtube_url" name="youtube_url" placeholder="https://www.youtube.com/watch?v=..." required>
+                <label for="url" class="form-label">YouTube Video URL:</label>
+                <input type="text" class="form-control" id="url" name="url" placeholder="https://www.youtube.com/watch?v=..." required>
             </div>
             <div class="d-grid gap-2">
                 <button type="submit" class="btn btn-danger">Get Download Options</button>
             </div>
         </form>
+        {% endif %}
     </div>
 </body>
 </html>
