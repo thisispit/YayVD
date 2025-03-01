@@ -87,16 +87,21 @@ def get_available_formats(url):
         'no_warnings': True,
         'skip_download': True,
         'writeinfojson': False,
-        'extract_flat': False,  # Changed to False for full extraction
         'format': 'best',
         'geo_bypass': True,
         'nocheckcertificate': True,
-        'ignoreerrors': False,  # Changed to False to catch errors
+        'ignoreerrors': False,
         'no_color': True,
         'extractor_retries': 5,
         'socket_timeout': 30,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web'],
+                'skip': ['dash', 'hls'],
+            }
+        },
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Accept-Language': 'en-us,en;q=0.5',
             'Sec-Fetch-Mode': 'navigate'
@@ -106,55 +111,72 @@ def get_available_formats(url):
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             try:
+                # First try with default options
                 info = ydl.extract_info(url, download=False)
+                
+                if info is None:
+                    # If failed, try with alternative options
+                    ydl_opts.update({
+                        'extractor_args': {
+                            'youtube': {
+                                'player_client': ['web'],
+                                'skip': [],
+                            }
+                        }
+                    })
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl2:
+                        info = ydl2.extract_info(url, download=False)
+                
                 if info is None:
                     return [], "Could not extract video information. Please check the URL and try again."
                 
                 formats = []
-                if FFMPEG_AVAILABLE:
-                    formats.extend([
-                        {
-                            'format_id': 'best',
-                            'ext': 'mp4',
-                            'resolution': 'Best quality',
-                            'filesize': 0,
-                            'type': 'Best quality (video+audio)',
-                            'requires_ffmpeg': True,
-                            'quality_label': 'Best Quality'
-                        }
-                    ])
+                # Add basic format as fallback
+                formats.append({
+                    'format_id': 'best',
+                    'ext': 'mp4',
+                    'resolution': 'Auto',
+                    'filesize': 0,
+                    'type': 'Auto Quality',
+                    'requires_ffmpeg': False,
+                    'quality_label': 'Auto'
+                })
                 
-                # Add available formats from the video
+                # Add available formats from the video if present
                 if 'formats' in info:
+                    seen_qualities = set()
                     for f in info['formats']:
                         if f.get('height') and f.get('acodec') != 'none' and f.get('vcodec') != 'none':
-                            format_info = {
-                                'format_id': f['format_id'],
-                                'ext': f.get('ext', 'mp4'),
-                                'resolution': f"{f.get('height', '?')}p",
-                                'filesize': f.get('filesize', 0),
-                                'type': f"Video + Audio ({f.get('ext', 'mp4').upper()})",
-                                'requires_ffmpeg': False,
-                                'quality_label': f"{f.get('height', '?')}p"
-                            }
-                            formats.append(format_info)
+                            quality = f"{f.get('height')}p"
+                            if quality not in seen_qualities:
+                                seen_qualities.add(quality)
+                                format_info = {
+                                    'format_id': f['format_id'],
+                                    'ext': f.get('ext', 'mp4'),
+                                    'resolution': quality,
+                                    'filesize': f.get('filesize', 0),
+                                    'type': f"Video + Audio ({f.get('ext', 'mp4').upper()})",
+                                    'requires_ffmpeg': False,
+                                    'quality_label': quality
+                                }
+                                formats.append(format_info)
                 
-                if not formats:
-                    # Fallback to basic format if no formats found
-                    formats.append({
-                        'format_id': 'best',
-                        'ext': 'mp4',
-                        'resolution': 'Auto',
-                        'filesize': 0,
-                        'type': 'Auto Quality',
-                        'requires_ffmpeg': False,
-                        'quality_label': 'Auto'
-                    })
+                # Sort formats by resolution
+                formats.sort(key=lambda x: int(x['resolution'].replace('p', '')) if x['resolution'] != 'Auto' else 0, reverse=True)
                 
                 return formats, info.get('title', 'Video')
             except Exception as e:
                 logger.error(f"Error extracting formats: {str(e)}")
-                return [], f"Error extracting video information: {str(e)}"
+                # Return basic format as fallback
+                return [{
+                    'format_id': 'best',
+                    'ext': 'mp4',
+                    'resolution': 'Auto',
+                    'filesize': 0,
+                    'type': 'Auto Quality',
+                    'requires_ffmpeg': False,
+                    'quality_label': 'Auto'
+                }], "Video"
     except Exception as e:
         logger.error(f"YoutubeDL error: {str(e)}")
         return [], f"Error initializing downloader: {str(e)}"
@@ -230,8 +252,14 @@ def download():
             'quiet': False,
             'no_warnings': False,
             'merge_output_format': 'mp4',
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'web'],
+                    'skip': ['dash', 'hls'],
+                }
+            },
             'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'en-us,en;q=0.5',
                 'Sec-Fetch-Mode': 'navigate'
@@ -242,9 +270,24 @@ def download():
             ydl_opts['ffmpeg_location'] = FFMPEG_PATH
         
         try:
+            # First try with default options
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 try:
                     info = ydl.extract_info(url, download=True)
+                    if info is None:
+                        # If failed, try with alternative options
+                        ydl_opts.update({
+                            'format': 'best',  # Fallback to best format
+                            'extractor_args': {
+                                'youtube': {
+                                    'player_client': ['web'],
+                                    'skip': [],
+                                }
+                            }
+                        })
+                        with yt_dlp.YoutubeDL(ydl_opts) as ydl2:
+                            info = ydl2.extract_info(url, download=True)
+                    
                     if info is None:
                         return render_template('index.html', error="Could not download video. Please check the URL and try again.")
                     
