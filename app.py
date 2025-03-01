@@ -87,10 +87,20 @@ def get_available_formats(url):
         'no_warnings': True,
         'skip_download': True,
         'writeinfojson': False,
-        'youtube_include_dash_manifest': True,
-        'no_check_certificates': True,
-        'extractor_args': {'youtube': {'player_client': ['android']}},
-        'format': 'best'
+        'youtube_include_dash_manifest': False,  # Disable DASH manifest
+        'extract_flat': True,
+        'format': 'best',
+        'geo_bypass': True,
+        'nocheckcertificate': True,
+        'ignoreerrors': True,
+        'no_color': True,
+        'extractor_retries': 3,
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-us,en;q=0.5',
+            'Sec-Fetch-Mode': 'navigate'
+        }
     }
     
     if FFMPEG_PATH:
@@ -262,11 +272,20 @@ def download():
         ydl_opts = {
             'format': format_id,
             'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(title)s.%(ext)s'),
-            'no_check_certificates': True,
-            'extractor_args': {'youtube': {'player_client': ['android']}},
+            'geo_bypass': True,
+            'nocheckcertificate': True,
+            'ignoreerrors': True,
+            'no_color': True,
+            'extractor_retries': 3,
             'quiet': False,
             'no_warnings': False,
-            'merge_output_format': 'mp4'  # Force MP4 output
+            'merge_output_format': 'mp4',
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-us,en;q=0.5',
+                'Sec-Fetch-Mode': 'navigate'
+            }
         }
         
         if FFMPEG_PATH:
