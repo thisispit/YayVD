@@ -6,6 +6,8 @@ import re
 import threading
 import time
 import subprocess
+from base64 import b64decode
+import json
 
 app = Flask(__name__)
 
@@ -57,16 +59,34 @@ def is_ffmpeg_installed(ffmpeg_location=None):
         print(f"FFmpeg check error: {e}")
         return False
 
+def get_yt_options():
+    """Get YouTube download options based on environment."""
+    base_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'extract_flat': False,
+        'format': 'best',
+    }
+    
+    if os.environ.get('YT_AUTH_REQUIRED') == 'true':
+        # Use environment variable for cookies if provided
+        cookies_str = os.environ.get('YT_COOKIES', '')
+        if cookies_str:
+            try:
+                cookies_file = os.path.join(DOWNLOAD_FOLDER, '.cookies.txt')
+                with open(cookies_file, 'w') as f:
+                    f.write(b64decode(cookies_str).decode())
+                base_opts['cookiefile'] = cookies_file
+            except Exception as e:
+                print(f"Failed to process cookies: {e}")
+    
+    return base_opts
+
 def get_available_formats(url):
     """Retrieve available formats from the video."""
     ydl_opts = {
-        'quiet': True,
-        'no_warnings': True,
+        **get_yt_options(),
         'skip_download': True,
-        'cookiefile': '/app/youtube.com_cookies.txt',  # Use direct cookie file
-        'no_check_certificate': True,
-        'format': 'best',
-        'socket_timeout': 30,
     }
     
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -211,6 +231,7 @@ def download():
         return render_template('index.html', error="FFmpeg is not accessible")
     
     ydl_opts = {
+        **get_yt_options(),
         'format': format_id,
         'outtmpl': output_path,
         'noplaylist': True,

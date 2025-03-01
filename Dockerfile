@@ -33,9 +33,8 @@ RUN mkdir -p /app/downloads && \
 COPY requirements.txt . 
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code and cookie file
+# Copy application code
 COPY . .
-COPY youtube.com_cookies.txt /app/youtube.com_cookies.txt
 
 # Verify FFmpeg and files
 RUN ffmpeg -version && \
@@ -45,6 +44,8 @@ RUN ffmpeg -version && \
 ENV PORT=8080
 ENV FFMPEG_PATH=/usr/bin/ffmpeg
 ENV DOWNLOAD_FOLDER=/app/downloads
+ENV YT_AUTH_REQUIRED=false
+ENV YT_COOKIES=""
 
 # Expose port
 EXPOSE 8080
