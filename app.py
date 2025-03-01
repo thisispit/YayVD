@@ -88,8 +88,9 @@ def get_available_formats(url):
         'skip_download': True,
         'writeinfojson': False,
         'youtube_include_dash_manifest': True,
-        'cookiesfrombrowser': ('chrome',),  # Try to use Chrome cookies
         'no_check_certificates': True,
+        'extractor_args': {'youtube': {'player_client': ['android']}},
+        'format': 'best'
     }
     
     if FFMPEG_PATH:
@@ -254,70 +255,37 @@ def index():
 
 @app.route('/download', methods=['POST'])
 def download():
-    youtube_url = request.form['youtube_url']
-    format_id = request.form['format_id']
-    video_title = request.form['video_title']
-    
-    # Generate unique filename
-    sanitized_title = sanitize_filename(video_title)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_filename = f"{sanitized_title}_{timestamp}.%(ext)s"
-    output_path = os.path.join(DOWNLOAD_FOLDER, output_filename)
-    
-    # Check if a recent download exists
-    existing_file = None
-    for filepath, download_time in downloaded_files.items():
-        if (sanitized_title in filepath and 
-            datetime.now() - download_time < timedelta(seconds=CACHE_TIMEOUT)):
-            existing_file = filepath
-            break
-    
-    if existing_file and os.path.exists(existing_file):
-        logger.info(f"Using cached file: {existing_file}")
-        response = send_file(
-            existing_file,
-            as_attachment=True,
-            download_name=os.path.basename(existing_file),
-            mimetype='application/octet-stream'
-        )
-        return response
-    
-    requires_ffmpeg = '+' in format_id or 'bestvideo' in format_id
-    
-    if requires_ffmpeg and not FFMPEG_AVAILABLE:
-        return render_template('index.html', 
-                             error="This format requires FFmpeg. Please choose a format that doesn't require merging video and audio.")
-    
-    ydl_opts = {
-        'format': format_id,
-        'outtmpl': output_path,
-        'noplaylist': True,
-        'quiet': False,
-        'no_warnings': False,
-        'merge_output_format': 'mp4',  # Force MP4 output
-        'cookiesfrombrowser': ('chrome',),  # Try to use Chrome cookies
-        'no_check_certificates': True,
-    }
-    
-    # Add FFmpeg location if available
-    if FFMPEG_PATH:
-        ydl_opts['ffmpeg_location'] = FFMPEG_PATH
-    
-    if FFMPEG_AVAILABLE:
-        ydl_opts['postprocessors'] = [
-            {
-                'key': 'FFmpegVideoConvertor',
-                'preferedformat': 'mp4',
-            },
-            {
-                'key': 'FFmpegMetadata',
-                'add_metadata': True,
-            }
-        ]
-    
     try:
+        url = request.form['url']
+        format_id = request.form['format']
+        
+        ydl_opts = {
+            'format': format_id,
+            'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(title)s.%(ext)s'),
+            'no_check_certificates': True,
+            'extractor_args': {'youtube': {'player_client': ['android']}},
+            'quiet': False,
+            'no_warnings': False,
+            'merge_output_format': 'mp4'  # Force MP4 output
+        }
+        
+        if FFMPEG_PATH:
+            ydl_opts['ffmpeg_location'] = FFMPEG_PATH
+        
+        if '+' in format_id or 'bestvideo' in format_id:
+            ydl_opts['postprocessors'] = [
+                {
+                    'key': 'FFmpegVideoConvertor',
+                    'preferedformat': 'mp4',
+                },
+                {
+                    'key': 'FFmpegMetadata',
+                    'add_metadata': True,
+                }
+            ]
+        
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(youtube_url, download=True)
+            info = ydl.extract_info(url, download=True)
             downloaded_file = ydl.prepare_filename(info)
             
             if not os.path.exists(downloaded_file):
