@@ -230,11 +230,11 @@ def download_with_proxy(url, quality='720p'):
         return None
     
     try:
-        # Try to use youtube-dl-server
+        # Choose a proxy service that doesn't require youtube-dl-server
         headers = {'User-Agent': get_random_user_agent()}
         
-        # First request to get the download URL
-        proxy_url = f"https://corsproxy.io/?https://projectlounge.pw/ytdl/download?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3D{video_id}&format=mp4"
+        # Try using projectlounge proxy - this is public and doesn't require server dependency
+        proxy_url = f"https://projectlounge.pw/ytdl/download?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3D{video_id}&format=mp4"
         
         response = requests.get(proxy_url, headers=headers, timeout=10, stream=True)
         
