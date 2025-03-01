@@ -70,6 +70,24 @@
             top: -10px;
             right: 10px;
         }
+        .format-card.video-only {
+            opacity: 0.8;
+            border: 1px solid #ddd;
+        }
+        
+        .format-card.video-only:hover {
+            opacity: 1;
+        }
+        
+        .video-only-warning {
+            color: #856404;
+            background-color: #fff3cd;
+            border-color: #ffeeba;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
     </style>
 </head>
 <body>
@@ -88,13 +106,28 @@
         <div class="row">
             {% for format in formats %}
             <div class="col-md-4 mb-3">
-                <div class="card format-card position-relative {% if 'Best' in format.resolution %}highlight-format{% endif %}">
-                    {% if 'Best' in format.resolution %}
+                <div class="card format-card position-relative 
+                    {% if format.get('is_video_only') %}video-only{% endif %}
+                    {% if 'Best' in format.resolution and not format.get('is_video_only') %}highlight-format{% endif %}">
+                    {% if 'Best' in format.resolution and not format.get('is_video_only') %}
                     <span class="badge bg-danger badge-quality">Recommended</span>
                     {% endif %}
                     <div class="card-body">
-                        <h5 class="card-title">{{ format.resolution }}</h5>
-                        <h6 class="card-subtitle mb-2 text-muted">{{ format.type }}</h6>
+                        <h5 class="card-title">
+                            {{ format.resolution }}
+                            {% if format.quality_label %}
+                            <span class="badge bg-info">{{ format.quality_label }}</span>
+                            {% endif %}
+                        </h5>
+                        <h6 class="card-subtitle mb-2 text-muted">{{ format.type }}
+                            {% if format.requires_ffmpeg %}
+                            {% if not ffmpeg_available %}
+                            <span class="badge bg-warning">Requires FFmpeg - Not Available</span>
+                            {% else %}
+                            <span class="badge bg-success">FFmpeg Available</span>
+                            {% endif %}
+                            {% endif %}
+                        </h6>
                         <p class="card-text">
                             Format: {{ format.ext }}<br>
                             {% if format.fps and format.fps != '?' %}
@@ -106,11 +139,19 @@
                             Size: Calculated at download
                             {% endif %}
                         </p>
+                        {% if format.get('is_video_only') %}
+                        <div class="video-only-warning">
+                            Note: This format contains video only (no audio)
+                        </div>
+                        {% endif %}
                         <form method="POST" action="{{ url_for('download') }}">
                             <input type="hidden" name="youtube_url" value="{{ youtube_url }}">
                             <input type="hidden" name="format_id" value="{{ format.format_id }}">
                             <input type="hidden" name="video_title" value="{{ video_title }}">
-                            <button type="submit" class="btn btn-danger w-100">Download</button>
+                            <button type="submit" class="btn btn-danger w-100" 
+                                {% if format.requires_ffmpeg and not ffmpeg_available %}disabled{% endif %}>
+                                Download
+                            </button>
                         </form>
                     </div>
                 </div>
