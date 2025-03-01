@@ -63,7 +63,7 @@ def get_available_formats(url):
         'quiet': True,
         'no_warnings': True,
         'skip_download': True,
-        'cookiesfrombrowser': ('chrome',),  # Use Chrome cookies
+        'cookiesfrombrowser': ('firefox',),  # Changed from chrome to firefox
         'no_check_certificate': True,
         'extract_flat': False,  # Changed to False to get full info
         'format': 'best',  # Default format for initial check
@@ -232,7 +232,7 @@ def download():
         'no_warnings': False,
         'ffmpeg_location': ffmpeg_path,
         'postprocessors': postprocessors,
-        'cookiesfrombrowser': ('chrome',),  # Use Chrome cookies
+        'cookiesfrombrowser': ('firefox',),  # Changed from chrome to firefox
         'no_check_certificate': True,
         'socket_timeout': 30,
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
