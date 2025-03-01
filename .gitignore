@@ -1,17 +1,27 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
 
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
 
+# Virtual environments
+venv/
+env/
+ENV/
 
+# Downloaded files
+downloads/
 
+# Local configuration
+.env
+.env.local
 
-
-
-
-
-
-
-
-
-
-
-
-.cookies.txtyoutube.com_cookies.txt*.cookies.txtREADME.md.gitignore.git/*.log.envvenv/env/.Python*.pyd*.pyo*.pyc__pycache__/downloads/
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
