@@ -88,23 +88,23 @@ def get_available_formats(url):
         'skip_download': True,
         'writeinfojson': False,
         'format': 'best',
-        'geo_bypass': True,
-        'nocheckcertificate': True,
-        'ignoreerrors': False,
-        'no_color': True,
-        'extractor_retries': 5,
+        'extractor_retries': 3,
         'socket_timeout': 30,
+        'extract_flat': False,
+        'youtube_include_dash_manifest': False,
         'extractor_args': {
             'youtube': {
-                'player_client': ['android', 'web'],
-                'skip': ['dash', 'hls'],
+                'innertube_client': ['android'],
+                'player_client': ['android'],
             }
         },
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-us,en;q=0.5',
-            'Sec-Fetch-Mode': 'navigate'
+            'User-Agent': 'com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip',
+            'Accept': '*/*',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Origin': 'https://www.youtube.com',
+            'Referer': 'https://www.youtube.com/'
         }
     }
     
@@ -115,24 +115,36 @@ def get_available_formats(url):
                 info = ydl.extract_info(url, download=False)
                 
                 if info is None:
-                    # If failed, try with alternative options
+                    # Try with web client if android fails
                     ydl_opts.update({
                         'extractor_args': {
                             'youtube': {
+                                'innertube_client': ['web'],
                                 'player_client': ['web'],
-                                'skip': [],
                             }
+                        },
+                        'http_headers': {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
                         }
                     })
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl2:
                         info = ydl2.extract_info(url, download=False)
                 
                 if info is None:
+                    # Final attempt with minimal options
+                    ydl_opts = {
+                        'quiet': True,
+                        'format': 'best',
+                        'no_warnings': True
+                    }
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl3:
+                        info = ydl3.extract_info(url, download=False)
+                
+                if info is None:
                     return [], "Could not extract video information. Please check the URL and try again."
                 
-                formats = []
-                # Add basic format as fallback
-                formats.append({
+                # Always include best format as fallback
+                formats = [{
                     'format_id': 'best',
                     'ext': 'mp4',
                     'resolution': 'Auto',
@@ -140,9 +152,9 @@ def get_available_formats(url):
                     'type': 'Auto Quality',
                     'requires_ffmpeg': False,
                     'quality_label': 'Auto'
-                })
+                }]
                 
-                # Add available formats from the video if present
+                # Add available formats if present
                 if 'formats' in info:
                     seen_qualities = set()
                     for f in info['formats']:
@@ -237,32 +249,34 @@ def index():
 @app.route('/download', methods=['POST'])
 def download():
     try:
-        url = request.form['url']
-        format_id = request.form['format']
+        url = request.form.get('url')
+        format_id = request.form.get('format', 'best')  # Default to 'best' if not specified
+        
+        if not url:
+            return render_template('index.html', error="Please provide a valid URL")
         
         ydl_opts = {
             'format': format_id,
             'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(title)s.%(ext)s'),
-            'geo_bypass': True,
-            'nocheckcertificate': True,
-            'ignoreerrors': False,
-            'no_color': True,
-            'extractor_retries': 5,
+            'extractor_retries': 3,
             'socket_timeout': 30,
             'quiet': False,
             'no_warnings': False,
             'merge_output_format': 'mp4',
+            'youtube_include_dash_manifest': False,
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['android', 'web'],
-                    'skip': ['dash', 'hls'],
+                    'innertube_client': ['android'],
+                    'player_client': ['android'],
                 }
             },
             'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-us,en;q=0.5',
-                'Sec-Fetch-Mode': 'navigate'
+                'User-Agent': 'com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip',
+                'Accept': '*/*',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate',
+                'Origin': 'https://www.youtube.com',
+                'Referer': 'https://www.youtube.com/'
             }
         }
         
@@ -274,19 +288,34 @@ def download():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 try:
                     info = ydl.extract_info(url, download=True)
+                    
                     if info is None:
-                        # If failed, try with alternative options
+                        # Try with web client if android fails
                         ydl_opts.update({
                             'format': 'best',  # Fallback to best format
                             'extractor_args': {
                                 'youtube': {
+                                    'innertube_client': ['web'],
                                     'player_client': ['web'],
-                                    'skip': [],
                                 }
+                            },
+                            'http_headers': {
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
                             }
                         })
                         with yt_dlp.YoutubeDL(ydl_opts) as ydl2:
                             info = ydl2.extract_info(url, download=True)
+                    
+                    if info is None:
+                        # Final attempt with minimal options
+                        ydl_opts = {
+                            'format': 'best',
+                            'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(title)s.%(ext)s'),
+                            'quiet': True,
+                            'no_warnings': True
+                        }
+                        with yt_dlp.YoutubeDL(ydl_opts) as ydl3:
+                            info = ydl3.extract_info(url, download=True)
                     
                     if info is None:
                         return render_template('index.html', error="Could not download video. Please check the URL and try again.")
