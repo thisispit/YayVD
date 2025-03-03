@@ -1,8 +1,13 @@
+<<<<<<< HEAD
+=======
+<!-- templates/index.html -->
+>>>>>>> 2c961646bbb07d254cc13261c49a725688538268
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<<<<<<< HEAD
     <title>YAYVD - Yet Another YouTube Video Downloader</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
     <style>
@@ -62,10 +67,54 @@
             margin-top: 20px;
             font-size: 0.8rem;
             color: #888;
+=======
+    <title>YouTube Video Downloader</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding-top: 50px;
+        }
+        .container {
+            max-width: 800px;
+            background-color: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #ff0000;
+            margin-bottom: 30px;
+        }
+        .form-control:focus {
+            border-color: #ff0000;
+            box-shadow: 0 0 0 0.25rem rgba(255, 0, 0, 0.25);
+        }
+        .btn-danger {
+            background-color: #ff0000;
+            border-color: #ff0000;
+        }
+        .format-card {
+            margin-bottom: 10px;
+            transition: transform 0.2s;
+        }
+        .format-card:hover {
+            transform: translateY(-5px);
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        .spinner-border {
+            width: 3rem; 
+            height: 3rem;
+>>>>>>> 2c961646bbb07d254cc13261c49a725688538268
         }
     </style>
 </head>
 <body>
+<<<<<<< HEAD
     <div class="app-container">
         <h1 class="app-title">
             <span class="app-logo">▶</span>YAYVD
@@ -73,10 +122,18 @@
         
         {% if error %}
         <div class="alert alert-danger mb-4" role="alert">
+=======
+    <div class="container">
+        <h1 class="text-center">YouTube Video Downloader</h1>
+        
+        {% if error %}
+        <div class="alert alert-danger" role="alert">
+>>>>>>> 2c961646bbb07d254cc13261c49a725688538268
             {{ error }}
         </div>
         {% endif %}
         
+<<<<<<< HEAD
         <form method="POST" action="{{ url_for('index') }}">
             <div class="mb-4">
                 <input type="text" class="form-control" id="youtube_url" name="youtube_url" 
@@ -93,3 +150,170 @@
     </div>
 </body>
 </html>
+=======
+        {% if formats %}
+        <div class="mb-4">
+            <h2>Video: {{ video_title }}</h2>
+        </div>
+        
+        <div class="mb-4">
+            <h3>Select Format to Download:</h3>
+        </div>
+        
+        <div class="row">
+            {% for format in formats %}
+            <div class="col-md-6 mb-3">
+                <div class="card format-card">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ format.resolution }}</h5>
+                        <p class="card-text">
+                            Format: {{ format.ext }}<br>
+                            Type: {{ format.type }}<br>
+                            Quality: {{ format.quality_label }}
+                        </p>
+                        <form method="POST" action="{{ url_for('download') }}" class="download-form">
+                            <input type="hidden" name="url" value="{{ url }}">
+                            <input type="hidden" name="format" value="{{ format.format_id }}">
+                            <button type="submit" class="btn btn-danger">Download</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="mt-4">
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">Back</a>
+        </div>
+        
+        <div class="loading">
+            <div class="spinner-border text-danger" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-3">Downloading video... This may take a few moments.</p>
+        </div>
+        
+        {% else %}
+        <form method="POST" action="{{ url_for('index') }}" id="url-form">
+            <div class="mb-3">
+                <label for="url" class="form-label">YouTube Video URL:</label>
+                <input type="text" class="form-control" id="url" name="url" placeholder="https://www.youtube.com/watch?v=..." required>
+            </div>
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-danger">Get Download Options</button>
+            </div>
+        </form>
+        
+        <div class="loading">
+            <div class="spinner-border text-danger" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-3">Processing video... This may take a few moments.</p>
+        </div>
+        {% endif %}
+    </div>
+    
+    <script>
+        // Show loading spinner when form is submitted
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlForm = document.getElementById('url-form');
+            const downloadForms = document.querySelectorAll('.download-form');
+            const loading = document.querySelector('.loading');
+            
+            if (urlForm) {
+                urlForm.addEventListener('submit', function() {
+                    loading.style.display = 'block';
+                });
+            }
+            
+            downloadForms.forEach(form => {
+                form.addEventListener('submit', function() {
+                    loading.style.display = 'block';
+                });
+            });
+        });
+    </script>
+</body>
+</html>
+
+<!-- templates/select_format.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select Video Format - YouTube Downloader</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding-top: 50px;
+        }
+        .container {
+            max-width: 800px;
+            background-color: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1, h2 {
+            color: #ff0000;
+        }
+        .format-card {
+            margin-bottom: 10px;
+            transition: transform 0.2s;
+        }
+        .format-card:hover {
+            transform: translateY(-5px);
+        }
+        .btn-danger {
+            background-color: #ff0000;
+            border-color: #ff0000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center mb-4">YouTube Video Downloader</h1>
+        
+        <div class="mb-4">
+            <h2>Video: {{ video_title }}</h2>
+        </div>
+        
+        <div class="mb-4">
+            <h3>Select Format to Download:</h3>
+        </div>
+        
+        <div class="row">
+            {% for format in formats %}
+            <div class="col-md-6 mb-3">
+                <div class="card format-card">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ format.resolution }}</h5>
+                        <p class="card-text">
+                            Format: {{ format.ext }}<br>
+                            {% if format.filesize %}
+                            Size: {{ (format.filesize / 1024 / 1024) | round(2) }} MB
+                            {% else %}
+                            Size: Unknown
+                            {% endif %}
+                        </p>
+                        <form method="POST" action="{{ url_for('download') }}">
+                            <input type="hidden" name="youtube_url" value="{{ youtube_url }}">
+                            <input type="hidden" name="format_id" value="{{ format.format_id }}">
+                            <input type="hidden" name="video_title" value="{{ video_title }}">
+                            <button type="submit" class="btn btn-danger">Download</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="mt-4">
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">Back</a>
+        </div>
+    </div>
+</body>
+</html>
+>>>>>>> 2c961646bbb07d254cc13261c49a725688538268
