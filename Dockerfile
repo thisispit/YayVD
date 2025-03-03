@@ -6,7 +6,7 @@ WORKDIR /app
 
 # Install build dependencies and FFmpeg
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc python3-dev ffmpeg && \
+    apt-get install -y --no-install-recommends gcc python3-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
@@ -22,6 +22,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Install FFmpeg in the final stage
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ffmpeg && \
+    rm -rf /var/lib/apt/lists/*
+
 # Copy virtual environment from builder stage
 COPY --from=builder /opt/venv /opt/venv
 
@@ -31,6 +36,9 @@ ENV PYTHONUNBUFFERED=1
 
 # Copy application code
 COPY . .
+
+# Create downloads directory
+RUN mkdir -p downloads
 
 # Expose port
 EXPOSE 8000
