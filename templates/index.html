@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YAYVD - Yet Another YouTube Video Downloader</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f5f5f5;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: #333;
+            padding: 40px 0;
+        }
+        .app-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        .app-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 25px;
+            color: #333;
+            text-align: center;
+        }
+        .app-logo {
+            color: #ff4d4d;
+            margin-right: 8px;
+        }
+        .form-control {
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            box-shadow: none;
+        }
+        .form-control:focus {
+            border-color: #ff4d4d;
+            box-shadow: 0 0 0 3px rgba(255, 77, 77, 0.1);
+        }
+        .btn-download {
+            background-color: #ff4d4d;
+            border: none;
+            border-radius: 8px;
+            padding: 12px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        .btn-download:hover, .btn-download:focus {
+            background-color: #ff3333;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 5px rgba(255, 77, 77, 0.2);
+        }
+        .alert {
+            border-radius: 8px;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 0.8rem;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <h1 class="app-title">
+            <span class="app-logo">▶</span>YAYVD
+        </h1>
+        
+        {% if error %}
+        <div class="alert alert-danger mb-4" role="alert">
+            {{ error }}
+        </div>
+        {% endif %}
+        
+        <form method="POST" action="{{ url_for('index') }}">
+            <div class="mb-4">
+                <input type="text" class="form-control" id="youtube_url" name="youtube_url" 
+                    placeholder="Paste YouTube URL here..." required>
+            </div>
+            <div class="d-grid">
+                <button type="submit" class="btn btn-download">Get Download Options</button>
+            </div>
+        </form>
+        
+        <div class="footer">
+            Yet Another YouTube Video Downloader
+        </div>
+    </div>
+</body>
+</html>

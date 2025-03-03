@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YAYVD - Select Format</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f5f5f5;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: #333;
+            padding: 40px 0;
+        }
+        .app-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        .app-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #333;
+            text-align: center;
+        }
+        .app-logo {
+            color: #ff4d4d;
+            margin-right: 8px;
+        }
+        .video-title {
+            font-size: 1.1rem;
+            font-weight: 500;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .format-section-title {
+            font-size: 1rem;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        .format-card {
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #eee;
+            transition: all 0.2s ease;
+            height: 100%;
+        }
+        .format-card:hover {
+            border-color: #ff4d4d;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+        .format-title {
+            font-weight: 500;
+            font-size: 1rem;
+            margin-bottom: 5px;
+        }
+        .format-info {
+            font-size: 0.85rem;
+            color: #666;
+            margin-bottom: 15px;
+        }
+        .btn-download {
+            background-color: #ff4d4d;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        .btn-download:hover, .btn-download:focus {
+            background-color: #ff3333;
+            transform: translateY(-1px);
+        }
+        .btn-back {
+            color: #666;
+            background-color: transparent;
+            border: 1px solid #ddd;
+            padding: 8px 20px;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .btn-back:hover {
+            background-color: #f5f5f5;
+            color: #333;
+            border-color: #ccc;
+        }
+        .recommended {
+            position: absolute;
+            top: -8px;
+            right: 10px;
+            background-color: #ff4d4d;
+            color: white;
+            font-size: 0.7rem;
+            padding: 3px 8px;
+            border-radius: 100px;
+            font-weight: 500;
+        }
+        .format-badge {
+            display: inline-block;
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        .badge-audio {
+            background-color: #e6f2ff;
+            color: #0066cc;
+        }
+        .badge-video {
+            background-color: #fff0e6;
+            color: #ff6600;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 0.8rem;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <h1 class="app-title">
+            <span class="app-logo">▶</span>YAYVD
+        </h1>
+        
+        <div class="video-title">
+            {{ video_title }}
+        </div>
+        
+        <h3 class="format-section-title">Select format:</h3>
+        
+        <div class="row row-cols-1 row-cols-md-3 g-3 mb-4">
+            {% for format in formats %}
+            <div class="col">
+                <div class="format-card position-relative {% if loop.first %}border-primary{% endif %}">
+                    {% if loop.first %}
+                    <div class="recommended">Recommended</div>
+                    {% endif %}
+                    <div class="format-title">{{ format.resolution }}</div>
+                    <div class="format-info">
+                        <div class="format-type mb-1">
+                            <span class="format-badge {% if 'audio' in format.type|lower and 'video' not in format.type|lower %}badge-audio{% else %}badge-video{% endif %}">
+                                {% if 'audio' in format.type|lower and 'video' not in format.type|lower %}
+                                    Audio only
+                                {% else %}
+                                    Audio + Video
+                                {% endif %}
+                            </span>
+                        </div>
+                        {{ format.ext }} {% if format.fps and format.fps != '?' %} • {{ format.fps }} FPS{% endif %}
+                        <br>
+                        {% if format.filesize %}
+                        {{ (format.filesize / 1024 / 1024) | round(1) }} MB
+                        {% else %}
+                        Size calculated on download
+                        {% endif %}
+                    </div>
+                    <form method="POST" action="{{ url_for('download') }}">
+                        <input type="hidden" name="youtube_url" value="{{ youtube_url }}">
+                        <input type="hidden" name="format_id" value="{{ format.format_id }}">
+                        <input type="hidden" name="video_title" value="{{ video_title }}">
+                        <button type="submit" class="btn btn-download w-100">Download</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="d-flex justify-content-center">
+            <a href="{{ url_for('index') }}" class="btn btn-back">Back</a>
+        </div>
+        
+        <div class="footer">
+            Yet Another YouTube Video Downloader
+        </div>
+    </div>
+</body>
+</html>
