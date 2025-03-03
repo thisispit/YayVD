@@ -5,6 +5,7 @@ from datetime import datetime
 import re
 from threading import Thread, Lock
 import time
+import random
 
 app = Flask(__name__)
 
@@ -22,221 +23,128 @@ def sanitize_filename(title):
     """Remove invalid characters from filename"""
     return re.sub(r'[\\/*?:"<>|]', "", title)
 
+# List of mobile user agents to rotate
+MOBILE_USER_AGENTS = [
+    'Mozilla/5.0 (Linux; Android 12; SM-S906N Build/QP1A.190711.020; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/120.0.6099.210 Mobile Safari/537.36',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+    'Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36',
+    'Mozilla/5.0 (iPad; CPU OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/101.0.4951.44 Mobile/15E148 Safari/604.1',
+    'Mozilla/5.0 (Linux; Android 11; Redmi Note 9 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Mobile Safari/537.36'
+]
+
+def get_random_user_agent():
+    """Return a random mobile user agent"""
+    return random.choice(MOBILE_USER_AGENTS)
+
 def get_available_formats(url):
-    # Detect if running on Railway or other cloud platform
-    is_cloud_env = os.environ.get('RAILWAY_STATIC_URL') is not None or os.environ.get('RAILWAY_SERVICE_ID') is not None
+    user_agent = get_random_user_agent()
     
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
         'skip_download': True,
         'writeinfojson': False,
-        'youtube_include_dash_manifest': True,
+        'youtube_include_dash_manifest': False,  # Reduce complexity of request
         'format': 'bestvideo+bestaudio/best',
-        # Use a more mobile-like user agent to avoid bot detection
-        'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
+        'user_agent': user_agent,
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
+            'User-Agent': user_agent,
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Referer': 'https://m.youtube.com/',
-            'Sec-Ch-Ua': '"Not.A/Brand";v="8", "Chromium";v="114", "Google Chrome";v="114"',
-            'Sec-Ch-Ua-Mobile': '?1',
-            'Sec-Ch-Ua-Platform': '"iOS"',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'cross-site',
-            'Sec-Fetch-User': '?1',
-            'X-YouTube-Client-Name': '2',
-            'X-YouTube-Client-Version': '2.20230602.01.00',
-            'DNT': '1'
+            'Referer': 'https://www.youtube.com/',
+            'X-Forwarded-For': f"192.168.{random.randint(1, 254)}.{random.randint(1, 254)}"
         },
         'nocheckcertificate': True,
         'geo_bypass': True,
-        'geo_bypass_country': 'US',
+        'geo_bypass_country': 'US',  # Try using US as location
         'extractor_args': {
             'youtube': {
-                'player_client': ['android', 'web', 'ios', 'mobile'],  # Try multiple clients
-                'player_skip': [],  # Don't skip anything to ensure we get player response
-                'skip': [],  # Don't skip any formats
-                'compat_opts': ['no-youtube-unavailable-videos', 'no-playlist-metafiles'],
-                'innertube_client': ['android', 'web', 'ios', 'tv_embedded'],  # Try multiple clients
-                'innertube_key': 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8',
-                'innertube_context': {
-                    'client': {
-                        'clientName': 'ANDROID',  # Try Android client
-                        'clientVersion': '17.31.35',
-                        'deviceModel': 'Pixel 6',
-                        'osName': 'Android',
-                        'osVersion': '12',
-                        'platform': 'MOBILE'
-                    }
-                }
+                'player_client': ['android', 'web'],  # Try both clients
+                'compat_opts': ['no-youtube-unavailable-videos']
             }
-        },
-        'cookiefile': 'youtube.com_cookies.txt' if is_cloud_env else None,
-        'cookiesfrombrowser': None if is_cloud_env else ('chrome',),
-        'retries': 15,  # Increase retries
-        'socket_timeout': 60,  # Increase timeout
-        'extract_flat': True,  # Extract flat info first
-        'force_generic_extractor': False,  # Try YouTube extractor first, then fallback
-        'allow_unplayable_formats': True,  # Allow unplayable formats to get more info
-        'check_formats': False  # Don't check formats to avoid errors
+        }
+    }
     
-    # Create a cookies file for cloud environment if it doesn't exist
-    if is_cloud_env and not os.path.exists('youtube.com_cookies.txt'):
-        with open('youtube.com_cookies.txt', 'w') as f:
-            f.write('# Netscape HTTP Cookie File\n')
-            f.write('# This file is generated by yt-dlp. Do not edit.\n\n')
-            f.write('.youtube.com\tTRUE\t/\tTRUE\t2147483647\tCONSENT\tYES+cb.20210328-17-p0.en+FX+700\n')
-            f.write('.youtube.com\tTRUE\t/\tTRUE\t2147483647\tPREF\tf6=40000000&hl=en\n')
-    
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        formats = []
-        
-        # Process all available formats
-        for f in info['formats']:
-            # Include formats with either height or width
-            if not (f.get('height') or f.get('width')):
-                continue
-                
-            format_info = {
-                'format_id': f['format_id'],
-                'ext': f['ext'],
-                'resolution': f"{f.get('height', '?')}p",
-                'filesize': f.get('filesize', f.get('filesize_approx', 0)),
-                'vcodec': f.get('vcodec', 'none'),
-                'acodec': f.get('acodec', 'none'),
-                'fps': f.get('fps', '?'),
-                'tbr': f.get('tbr', 0)
-            }
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            formats = []
             
-            # Modified format type labeling
-            if format_info['vcodec'] != 'none':
-                if format_info['acodec'] != 'none':
-                    format_info['type'] = 'Video + Audio'
-                else:
-                    format_info['type'] = 'Video only'
-                formats.append(format_info)
-            elif format_info['acodec'] != 'none':
-                format_info['type'] = 'Audio only'
-                formats.append(format_info)
-
-        # Get best video and audio streams
-        video_formats = [f for f in info['formats'] if f.get('vcodec') != 'none' and f.get('acodec') == 'none']
-        audio_formats = [f for f in info['formats'] if f.get('acodec') != 'none' and f.get('vcodec') == 'none']
-        
-        # Add merged format options
-        for video in video_formats:
-            if not video.get('height'):
-                continue
-            
-            for audio in audio_formats:
+            # Process all available formats
+            for f in info.get('formats', []):
+                # Include formats with either height or width
+                if not (f.get('height') or f.get('width')):
+                    continue
+                    
                 format_info = {
-                    'format_id': f'{video["format_id"]}+{audio["format_id"]}',
-                    'ext': 'mp4',
-                    'resolution': f'{video.get("height", "?")}p',
-                    'filesize': (video.get('filesize', 0) or 0) + (audio.get('filesize', 0) or 0),
-                    'type': 'Merged (Video + Audio)',
-                    'vcodec': video.get('vcodec', 'unknown'),
-                    'acodec': audio.get('acodec', 'unknown'),
-                    'fps': video.get('fps', '?'),
-                    'tbr': (video.get('tbr', 0) or 0) + (audio.get('tbr', 0) or 0)
+                    'format_id': f['format_id'],
+                    'ext': f['ext'],
+                    'resolution': f"{f.get('height', '?')}p",
+                    'filesize': f.get('filesize', f.get('filesize_approx', 0)),
+                    'vcodec': f.get('vcodec', 'none'),
+                    'acodec': f.get('acodec', 'none'),
+                    'fps': f.get('fps', '?'),
+                    'tbr': f.get('tbr', 0)
                 }
-                formats.append(format_info)
-        
-        # Add preset format options
-        additional_formats = [
-            {
-                'format_id': 'bestvideo+bestaudio/best',
-                'ext': 'mp4',
-                'resolution': 'Best quality',
-                'filesize': 0,
-                'type': 'Best quality (Merged)'
-            },
-            {
-                'format_id': 'bestvideo[height<=2160]+bestaudio/best',
-                'ext': 'mp4',
-                'resolution': 'Best up to 4K',
-                'filesize': 0,
-                'type': 'Merged 4K'
-            },
-            {
-                'format_id': 'bestvideo[height<=1080]+bestaudio/best',
-                'ext': 'mp4',
-                'resolution': 'Best up to 1080p',
-                'filesize': 0,
-                'type': 'Merged 1080p'
-            },
-            {
-                'format_id': 'bestvideo[height<=720]+bestaudio/best',
-                'ext': 'mp4',
-                'resolution': 'Best up to 720p',
-                'filesize': 0,
-                'type': 'Merged 720p'
-            }
-        ]
-        formats.extend(additional_formats)
-        
-        # Add special format options for best quality
-        formats.append({
-            'format_id': 'bestvideo+bestaudio/best',
-            'ext': 'mp4',  # Will use best available container
-            'resolution': 'Best quality',
-            'filesize': 0,
-            'type': 'Best quality (video+audio)'
-        })
-        
-        formats.append({
-            'format_id': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]',
-            'ext': 'mp4',
-            'resolution': 'Best MP4',
-            'filesize': 0,
-            'type': 'Best MP4 quality'
-        })
-        
-        formats.append({
-            'format_id': 'best[height<=1080]',
-            'ext': 'mp4',
-            'resolution': 'Up to 1080p',
-            'filesize': 0,
-            'type': 'Best quality up to 1080p'
-        })
-        
-        # Sort formats by type (video+audio first) and then by resolution
-        def parse_resolution(res):
-            if res in ['Best quality', 'Best MP4', 'Up to 1080p', 'Best up to 4K', 'Best up to 1080p', 'Best up to 720p']:
-                return 10000  # Give high priority to special formats
-            try:
-                return int(res.replace('p', ''))
-            except (ValueError, AttributeError):
-                return 0
+                
+                # Modified format type labeling
+                if format_info['vcodec'] != 'none':
+                    if format_info['acodec'] != 'none':
+                        format_info['type'] = 'Video + Audio'
+                    else:
+                        format_info['type'] = 'Video only'
+                    formats.append(format_info)
+                elif format_info['acodec'] != 'none':
+                    format_info['type'] = 'Audio only'
+                    formats.append(format_info)
 
-        formats = sorted(formats, 
-                        key=lambda x: (
-                            # Priority order: Best quality options first, then video+audio, then video only, then audio only
-                            0 if x['resolution'] in ['Best quality', 'Best MP4', 'Up to 1080p'] else
-                            1 if x['type'] == 'Video + Audio' else
-                            2 if x['type'] == 'Video only' else
-                            3,
-                            # Secondary sort by resolution using the new parse_resolution function
-                            parse_resolution(x['resolution'])
-                        ), 
-                        reverse=True)
-        
-        # Remove duplicate resolutions (keep highest bitrate)
-        seen_resolutions = set()
-        unique_formats = []
-        
-        for fmt in formats:
-            res_key = fmt['resolution']
-            if res_key not in seen_resolutions:
-                seen_resolutions.add(res_key)
-                unique_formats.append(fmt)
-        
-        return unique_formats, info['title']
+            # Add preset format options
+            additional_formats = [
+                {
+                    'format_id': 'bestvideo+bestaudio/best',
+                    'ext': 'mp4',
+                    'resolution': 'Best quality',
+                    'filesize': 0,
+                    'type': 'Best quality (Merged)'
+                },
+                {
+                    'format_id': 'bestvideo[height<=1080]+bestaudio/best',
+                    'ext': 'mp4',
+                    'resolution': 'Best up to 1080p',
+                    'filesize': 0,
+                    'type': 'Merged 1080p'
+                },
+                {
+                    'format_id': 'bestvideo[height<=720]+bestaudio/best',
+                    'ext': 'mp4',
+                    'resolution': 'Best up to 720p',
+                    'filesize': 0,
+                    'type': 'Merged 720p'
+                },
+                {
+                    'format_id': 'bestaudio/best',
+                    'ext': 'm4a',
+                    'resolution': 'Audio only',
+                    'filesize': 0,
+                    'type': 'Best audio'
+                }
+            ]
+            formats.extend(additional_formats)
+            
+            # Sort formats
+            formats = sorted(formats, 
+                            key=lambda x: (
+                                0 if x['resolution'] in ['Best quality', 'Best up to 1080p', 'Best up to 720p'] else
+                                1 if x['type'] == 'Video + Audio' else
+                                2 if x['type'] == 'Video only' else 3,
+                                # Try to parse resolution as number for sorting
+                                int(x['resolution'].replace('p', '')) if x['resolution'].replace('p', '').isdigit() else 0
+                            ), 
+                            reverse=True)
+            
+            return formats, info.get('title', 'Untitled Video')
+    except Exception as e:
+        raise Exception(f"Error extracting video information: {str(e)}")
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -270,8 +178,7 @@ def download():
     output_filename = f"{sanitized_title}_{timestamp}.%(ext)s"
     output_path = os.path.join(DOWNLOAD_FOLDER, output_filename)
     
-    # Detect if running on Railway or other cloud platform
-    is_cloud_env = os.environ.get('RAILWAY_STATIC_URL') is not None or os.environ.get('RAILWAY_SERVICE_ID') is not None
+    user_agent = get_random_user_agent()
     
     ydl_opts = {
         'format': format_id,
@@ -282,85 +189,37 @@ def download():
         'postprocessors': [{
             'key': 'FFmpegMetadata',
             'add_metadata': True,
-        }] if 'ffmpeg' not in format_id else [],
-        # Only use browser cookies when running locally
-        'cookiesfrombrowser': None if is_cloud_env else ('chrome',),
-        # Use a more mobile-like user agent to avoid bot detection
-        'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
+        }],
+        'user_agent': user_agent,
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
+            'User-Agent': user_agent,
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Referer': 'https://m.youtube.com/',
-            'Sec-Ch-Ua': '"Not.A/Brand";v="8", "Chromium";v="114", "Google Chrome";v="114"',
-            'Sec-Ch-Ua-Mobile': '?1',
-            'Sec-Ch-Ua-Platform': '"iOS"',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'cross-site',
-            'Sec-Fetch-User': '?1',
-            'Upgrade-Insecure-Requests': '1',
-            'Connection': 'keep-alive',
-            'Cache-Control': 'max-age=0',
-            'X-Requested-With': 'com.apple.mobilesafari',
-            'X-YouTube-Client-Name': '2',
-            'X-YouTube-Client-Version': '2.20230602.01.00',
-            'DNT': '1'
+            'Referer': 'https://www.youtube.com/',
+            'X-Forwarded-For': f"192.168.{random.randint(1, 254)}.{random.randint(1, 254)}"
         },
         'nocheckcertificate': True,
         'ignoreerrors': False,
-        'logtostderr': False,
+        'logtostderr': True,  # Log to stderr for debugging
         'geo_bypass': True,
         'geo_bypass_country': 'US',
         'extractor_args': {
             'youtube': {
-                'player_client': ['android', 'web', 'ios', 'mobile'],  # Try multiple clients
-                'player_skip': [],  # Don't skip anything to ensure we get player response
-                'skip': [],  # Don't skip any formats
-                'compat_opts': ['no-youtube-unavailable-videos', 'no-playlist-metafiles'],
-                'innertube_client': ['android', 'web', 'ios', 'tv_embedded'],  # Try multiple clients
-                'innertube_key': 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8',
-                'innertube_context': {
-                    'client': {
-                        'clientName': 'ANDROID',  # Try Android client
-                        'clientVersion': '17.31.35',
-                        'deviceModel': 'Pixel 6',
-                        'osName': 'Android',
-                        'osVersion': '12',
-                        'platform': 'MOBILE'
-                    }
-                }
+                'player_client': ['android', 'web'],  # Try both clients
+                'compat_opts': ['no-youtube-unavailable-videos']
             }
         },
         'socket_timeout': 30,
-        'retry_sleep_functions': {'http': lambda x: 5},
-        'source_address': '0.0.0.0',
-        'force_ipv4': True,
-        'ap_mso': None,
-        'ap_list': [],
-        'max_sleep_interval': 5,
-        'sleep_interval_function': lambda attempt: 1 + attempt * 2,
-        # Add cookies for authentication
-        'cookiefile': 'youtube.com_cookies.txt' if is_cloud_env else None,
-        # Add more retries for bot challenges
-        'retries': 10,
-        # Add random delay between requests to avoid rate limiting
-        'sleep_interval': 2,
-        # Add more options to bypass age verification
-        'age_limit': 21,
-        # Add more options to bypass geo-restrictions
-        'geo_verification_proxy': os.environ.get('GEO_PROXY') if is_cloud_env else None,
+        'retries': 10,  # Increase retry attempts
+        'retry_sleep_functions': {'http': lambda x: 5 + x * 2},  # Progressive backoff
+        'max_sleep_interval': 15,
+        'force_ipv4': True
     }
     
-    # Create a cookies file for cloud environment if it doesn't exist
-    if is_cloud_env and not os.path.exists('youtube.com_cookies.txt'):
-        with open('youtube.com_cookies.txt', 'w') as f:
-            f.write('# Netscape HTTP Cookie File\n')
-            f.write('# This file is generated by yt-dlp. Do not edit.\n\n')
-            f.write('.youtube.com\tTRUE\t/\tTRUE\t2147483647\tCONSENT\tYES+cb.20210328-17-p0.en+FX+700\n')
-            f.write('.youtube.com\tTRUE\t/\tTRUE\t2147483647\tPREF\tf6=40000000&hl=en\n')
-            
+    # Add a proxy if configured
+    if os.environ.get('HTTP_PROXY') or os.environ.get('HTTPS_PROXY'):
+        ydl_opts['proxy'] = os.environ.get('HTTPS_PROXY') or os.environ.get('HTTP_PROXY')
+    
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(youtube_url, download=True)
@@ -387,33 +246,15 @@ def download():
             response = send_file(downloaded_file, as_attachment=True, download_name=os.path.basename(downloaded_file))
             
             def delayed_delete():
-                # Initial delay to ensure file transfer is complete
-                time.sleep(120)  # Increased initial delay to 2 minutes
-                max_retries = 10  # Increased max retries
-                retry_delay = 60  # Increased retry delay to 60 seconds
-                
-                for attempt in range(max_retries):
-                    try:
-                        if os.path.exists(downloaded_file):
-                            # Try to open the file to check if it's still in use
-                            try:
-                                with open(downloaded_file, 'ab') as f:
-                                    pass
-                                # If we can open the file, it's safe to delete
-                                os.remove(downloaded_file)
-                                with cache_lock:
-                                    if cache_key in download_cache and download_cache[cache_key][0] == downloaded_file:
-                                        del download_cache[cache_key]
-                                print(f"Successfully deleted {downloaded_file}")
-                                break
-                            except PermissionError:
-                                print(f"File {downloaded_file} is still in use, retrying in {retry_delay} seconds...")
-                                time.sleep(retry_delay)
-                                continue
-                    except Exception as e:
-                        print(f"Attempt {attempt + 1} to delete file {downloaded_file} failed: {str(e)}")
-                        if attempt < max_retries - 1:  # Don't sleep on the last attempt
-                            time.sleep(retry_delay)
+                time.sleep(120)  # 2 minutes delay
+                try:
+                    if os.path.exists(downloaded_file):
+                        os.remove(downloaded_file)
+                        with cache_lock:
+                            if cache_key in download_cache and download_cache[cache_key][0] == downloaded_file:
+                                del download_cache[cache_key]
+                except Exception as e:
+                    print(f"Error deleting file: {str(e)}")
             
             delete_thread = Thread(target=delayed_delete)
             delete_thread.daemon = True
@@ -422,9 +263,23 @@ def download():
             return response
     except Exception as e:
         error_message = str(e)
-        if 'ffmpeg' in error_message.lower():
-            error_message += " Please choose another format that doesn't require post-processing."
+        if 'Sign in to confirm' in error_message or 'bot' in error_message.lower():
+            error_message = "YouTube has detected this as automated activity. Try a different format or video, or try using a proxy."
         return render_template('index.html', error=error_message)
 
+# Add a route to check if Railway environment variables are available
+@app.route('/check_env', methods=['GET'])
+def check_env():
+    is_railway = os.environ.get('RAILWAY_STATIC_URL') is not None or os.environ.get('RAILWAY_SERVICE_ID') is not None
+    proxy_configured = os.environ.get('HTTP_PROXY') is not None or os.environ.get('HTTPS_PROXY') is not None
+    env_info = {
+        "running_on_railway": is_railway,
+        "proxy_configured": proxy_configured,
+        "download_folder_exists": os.path.exists(DOWNLOAD_FOLDER),
+        "python_version": os.environ.get('PYTHON_VERSION', 'Unknown')
+    }
+    return str(env_info)
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
