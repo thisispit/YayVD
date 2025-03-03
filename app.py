@@ -34,10 +34,10 @@ def get_available_formats(url):
         'youtube_include_dash_manifest': True,
         'format': 'bestvideo+bestaudio/best',
         # Use a more mobile-like user agent to avoid bot detection
-        'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Mobile/15E148 Safari/604.1',
+        'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Mobile/15E148 Safari/604.1',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
             'Accept-Encoding': 'gzip, deflate, br',
             'Referer': 'https://m.youtube.com/',
@@ -57,19 +57,19 @@ def get_available_formats(url):
         'geo_bypass_country': 'US',
         'extractor_args': {
             'youtube': {
-                'player_client': ['ios', 'mobile'],
-                'player_skip': ['webpage', 'configs', 'js'],
-                'skip': ['hls', 'dash'],
-                'compat_opts': ['no-youtube-unavailable-videos'],
-                'innertube_client': ['ios', 'tv_embedded'],
+                'player_client': ['android', 'web', 'ios', 'mobile'],  # Try multiple clients
+                'player_skip': [],  # Don't skip anything to ensure we get player response
+                'skip': [],  # Don't skip any formats
+                'compat_opts': ['no-youtube-unavailable-videos', 'no-playlist-metafiles'],
+                'innertube_client': ['android', 'web', 'ios', 'tv_embedded'],  # Try multiple clients
                 'innertube_key': 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8',
                 'innertube_context': {
                     'client': {
-                        'clientName': 'IOS',
-                        'clientVersion': '17.31.4',
-                        'deviceModel': 'iPhone14,3',
-                        'osName': 'iOS',
-                        'osVersion': '14.6',
+                        'clientName': 'ANDROID',  # Try Android client
+                        'clientVersion': '17.31.35',
+                        'deviceModel': 'Pixel 6',
+                        'osName': 'Android',
+                        'osVersion': '12',
                         'platform': 'MOBILE'
                     }
                 }
@@ -77,9 +77,12 @@ def get_available_formats(url):
         },
         'cookiefile': 'youtube.com_cookies.txt' if is_cloud_env else None,
         'cookiesfrombrowser': None if is_cloud_env else ('chrome',),
-        'retries': 10,
-        'socket_timeout': 30
-    }
+        'retries': 15,  # Increase retries
+        'socket_timeout': 60,  # Increase timeout
+        'extract_flat': True,  # Extract flat info first
+        'force_generic_extractor': False,  # Try YouTube extractor first, then fallback
+        'allow_unplayable_formats': True,  # Allow unplayable formats to get more info
+        'check_formats': False  # Don't check formats to avoid errors
     
     # Create a cookies file for cloud environment if it doesn't exist
     if is_cloud_env and not os.path.exists('youtube.com_cookies.txt'):
@@ -283,10 +286,10 @@ def download():
         # Only use browser cookies when running locally
         'cookiesfrombrowser': None if is_cloud_env else ('chrome',),
         # Use a more mobile-like user agent to avoid bot detection
-        'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Mobile/15E148 Safari/604.1',
+        'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Mobile/15E148 Safari/604.1',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
             'Accept-Encoding': 'gzip, deflate, br',
             'Referer': 'https://m.youtube.com/',
@@ -312,19 +315,19 @@ def download():
         'geo_bypass_country': 'US',
         'extractor_args': {
             'youtube': {
-                'player_client': ['ios', 'mobile'],
-                'player_skip': ['webpage', 'configs', 'js'],
-                'skip': ['hls', 'dash'],
-                'compat_opts': ['no-youtube-unavailable-videos'],
-                'innertube_client': ['ios', 'tv_embedded'],
+                'player_client': ['android', 'web', 'ios', 'mobile'],  # Try multiple clients
+                'player_skip': [],  # Don't skip anything to ensure we get player response
+                'skip': [],  # Don't skip any formats
+                'compat_opts': ['no-youtube-unavailable-videos', 'no-playlist-metafiles'],
+                'innertube_client': ['android', 'web', 'ios', 'tv_embedded'],  # Try multiple clients
                 'innertube_key': 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8',
                 'innertube_context': {
                     'client': {
-                        'clientName': 'IOS',
-                        'clientVersion': '17.31.4',
-                        'deviceModel': 'iPhone14,3',
-                        'osName': 'iOS',
-                        'osVersion': '14.6',
+                        'clientName': 'ANDROID',  # Try Android client
+                        'clientVersion': '17.31.35',
+                        'deviceModel': 'Pixel 6',
+                        'osName': 'Android',
+                        'osVersion': '12',
                         'platform': 'MOBILE'
                     }
                 }
