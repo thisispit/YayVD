@@ -210,6 +210,9 @@ def download():
     output_filename = f"{sanitized_title}_{timestamp}.%(ext)s"
     output_path = os.path.join(DOWNLOAD_FOLDER, output_filename)
     
+    # Detect if running on Railway or other cloud platform
+    is_cloud_env = os.environ.get('RAILWAY_STATIC_URL') is not None or os.environ.get('RAILWAY_SERVICE_ID') is not None
+    
     ydl_opts = {
         'format': format_id,
         'outtmpl': output_path,
@@ -220,25 +223,58 @@ def download():
             'key': 'FFmpegMetadata',
             'add_metadata': True,
         }] if 'ffmpeg' not in format_id else [],
-        'cookiesfrombrowser': ('chrome',),  # Use cookies from Chrome browser
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        # Only use browser cookies when running locally
+        'cookiesfrombrowser': None if is_cloud_env else ('chrome',),
+        # Use a more mobile-like user agent to avoid bot detection
+        'user_agent': 'Mozilla/5.0 (Linux; Android 12; SM-S906N Build/QP1A.190711.020; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/120.0.6099.210 Mobile Safari/537.36',
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 12; SM-S906N Build/QP1A.190711.020; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/120.0.6099.210 Mobile Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
             'Accept-Language': 'en-US,en;q=0.9',
             'Accept-Encoding': 'gzip, deflate, br',
-            'Referer': 'https://www.youtube.com/',
-            'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-            'Sec-Ch-Ua-Mobile': '?0',
-            'Sec-Ch-Ua-Platform': '"Windows"',
+            'Referer': 'https://m.youtube.com/',  # Mobile YouTube referrer
+            'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120"',
+            'Sec-Ch-Ua-Mobile': '?1',  # Indicate mobile device
+            'Sec-Ch-Ua-Platform': '"Android"',  # Indicate Android platform
             'Sec-Fetch-Dest': 'document',
             'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'same-origin',
+            'Sec-Fetch-Site': 'none',  # Changed from same-origin to none
             'Sec-Fetch-User': '?1',
-            'Upgrade-Insecure-Requests': '1'
+            'Upgrade-Insecure-Requests': '1',
+            'Connection': 'keep-alive',
+            'Cache-Control': 'max-age=0',
+            'X-Requested-With': 'com.google.android.youtube'  # Add YouTube Android app identifier
         },
         'nocheckcertificate': True,
+        'ignoreerrors': False,
+        'logtostderr': False,
+        'geo_bypass': True,
+        'geo_bypass_country': 'US',
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android'],  # Prioritize Android client
+                'player_skip': ['webpage', 'configs', 'js'],
+                'skip': ['hls', 'dash'],
+                'compat_opts': ['no-youtube-unavailable-videos']
+            }
+        },
+        'socket_timeout': 30,
+        'retry_sleep_functions': {'http': lambda x: 5},
+        'source_address': '0.0.0.0',
+        'force_ipv4': True,
+        'ap_mso': None,  # Disable authentication provider
+        'ap_list': [],   # Empty authentication provider list
+        'max_sleep_interval': 5,  # Limit sleep between retries
+        'sleep_interval_function': lambda attempt: 1 + attempt * 2  # Progressive backoff
     }
+    
+    # Add proxy configuration if running in cloud environment and proxy is configured
+    if is_cloud_env:
+        # Check if proxy environment variables are set
+        http_proxy = os.environ.get('HTTP_PROXY')
+        https_proxy = os.environ.get('HTTPS_PROXY')
+        if http_proxy or https_proxy:
+            ydl_opts['proxy'] = https_proxy or http_proxy
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
