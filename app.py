@@ -46,6 +46,7 @@ def get_available_formats(url):
         'writeinfojson': False,
         'format': 'bestvideo+bestaudio/best',
         'user_agent': user_agent,
+        'cookiesfrombrowser': ['chrome', 'firefox', 'opera', 'edge', 'safari'],
         'http_headers': {
             'User-Agent': user_agent,
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -53,6 +54,10 @@ def get_available_formats(url):
             'Referer': 'https://www.youtube.com/'
         }
     }
+    
+    # Add proxy if configured
+    if os.environ.get('HTTP_PROXY') or os.environ.get('HTTPS_PROXY'):
+        ydl_opts['proxy'] = os.environ.get('HTTPS_PROXY') or os.environ.get('HTTP_PROXY')
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -261,15 +266,20 @@ def download():
         # Ensure FFmpeg is used for merging separate audio and video
         'merge_output_format': 'mp4',
         'user_agent': user_agent,
-        'cookiesfrombrowser': ['chrome'],  # Use cookies from Chrome browser
+        'cookiesfrombrowser': ['chrome', 'firefox', 'opera', 'edge', 'safari'],  # Try multiple browsers for cookies
         'http_headers': {
             'User-Agent': user_agent,
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
             'Referer': 'https://www.youtube.com/'
         },
-        'retries': 5
+        'retries': 10,  # Increase retries
+        'socket_timeout': 30  # Add timeout
     }
+    
+    # Add proxy if configured
+    if os.environ.get('HTTP_PROXY') or os.environ.get('HTTPS_PROXY'):
+        ydl_opts['proxy'] = os.environ.get('HTTPS_PROXY') or os.environ.get('HTTP_PROXY')
     
     # Add a proxy if configured
     if os.environ.get('HTTP_PROXY') or os.environ.get('HTTPS_PROXY'):
