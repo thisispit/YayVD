@@ -12,7 +12,7 @@ app = Flask(__name__)
 DOWNLOAD_FOLDER = 'downloads'
 CACHE_DURATION = 300  # 5 minutes cache
 
-# Cache dictionary to store recent downloads and lock for thread safety
+# Cache dictionary and lock for thread safety
 download_cache = {}
 cache_lock = Lock()
 
@@ -27,9 +27,7 @@ def sanitize_filename(title):
 MOBILE_USER_AGENTS = [
     'Mozilla/5.0 (Linux; Android 12; SM-S906N Build/QP1A.190711.020; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/120.0.6099.210 Mobile Safari/537.36',
     'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
-    'Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36',
-    'Mozilla/5.0 (iPad; CPU OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/101.0.4951.44 Mobile/15E148 Safari/604.1',
-    'Mozilla/5.0 (Linux; Android 11; Redmi Note 9 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Mobile Safari/537.36'
+    'Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36'
 ]
 
 def get_random_user_agent():
@@ -44,24 +42,13 @@ def get_available_formats(url):
         'no_warnings': True,
         'skip_download': True,
         'writeinfojson': False,
-        'youtube_include_dash_manifest': False,  # Reduce complexity of request
         'format': 'bestvideo+bestaudio/best',
         'user_agent': user_agent,
         'http_headers': {
             'User-Agent': user_agent,
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
-            'Referer': 'https://www.youtube.com/',
-            'X-Forwarded-For': f"192.168.{random.randint(1, 254)}.{random.randint(1, 254)}"
-        },
-        'nocheckcertificate': True,
-        'geo_bypass': True,
-        'geo_bypass_country': 'US',  # Try using US as location
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'web'],  # Try both clients
-                'compat_opts': ['no-youtube-unavailable-videos']
-            }
+            'Referer': 'https://www.youtube.com/'
         }
     }
     
@@ -87,12 +74,18 @@ def get_available_formats(url):
                     'tbr': f.get('tbr', 0)
                 }
                 
-                # Modified format type labeling
-                if format_info['vcodec'] != 'none':
-                    if format_info['acodec'] != 'none':
+                # Improved format type labeling - more accurate audio detection
+                has_video = format_info['vcodec'] != 'none' and format_info['vcodec'] != 'anull'
+                has_audio = format_info['acodec'] != 'none' and format_info['acodec'] != 'anull'
+                
+                if has_video:
+                    if has_audio:
                         format_info['type'] = 'Video + Audio'
                     else:
                         format_info['type'] = 'Video only'
+                    formats.append(format_info)
+                elif has_audio:
+                    format_info['type'] = 'Audio only'
                     formats.append(format_info)
                 elif format_info['acodec'] != 'none':
                     format_info['type'] = 'Audio only'
@@ -108,14 +101,14 @@ def get_available_formats(url):
                     'type': 'Best quality (Merged)'
                 },
                 {
-                    'format_id': 'bestvideo[height<=1080]+bestaudio/best',
+                    'format_id': 'bestvideo[height<=1080]+bestaudio/best[height<=1080]',
                     'ext': 'mp4',
                     'resolution': 'Best up to 1080p',
                     'filesize': 0,
                     'type': 'Merged 1080p'
                 },
                 {
-                    'format_id': 'bestvideo[height<=720]+bestaudio/best',
+                    'format_id': 'bestvideo[height<=720]+bestaudio/best[height<=720]',
                     'ext': 'mp4',
                     'resolution': 'Best up to 720p',
                     'filesize': 0,
@@ -131,16 +124,61 @@ def get_available_formats(url):
             ]
             formats.extend(additional_formats)
             
-            # Sort formats
+            # Create merged audio+video options from video-only formats
+            video_only_formats = [f for f in formats if f['type'] == 'Video only']
+            best_audio = next((f for f in formats if f['type'] == 'Audio only' and f.get('tbr', 0) > 0), None)
+            
+            if best_audio and video_only_formats:
+                merged_formats = []
+                # Get unique resolutions from video-only formats
+                unique_resolutions = set()
+                for vf in video_only_formats:
+                    resolution = vf.get('resolution', '')
+                    if resolution and resolution not in unique_resolutions and resolution.replace('p', '').isdigit():
+                        unique_resolutions.add(resolution)
+                        # Create a merged format option
+                        merged_format = {
+                            'format_id': f"{vf['format_id']}+{best_audio['format_id']}",
+                            'ext': 'mp4',
+                            'resolution': f"{resolution} (Merged)",
+                            'filesize': vf.get('filesize', 0) + best_audio.get('filesize', 0),
+                            'type': 'Video + Audio (FFmpeg)',
+                            'fps': vf.get('fps', '?')
+                        }
+                        merged_formats.append(merged_format)
+                
+                # Add the merged formats to the list
+                formats.extend(merged_formats)
+            
+            # Filter formats to include video+audio, audio-only, or merged sources
+            formats = [f for f in formats if 
+                      'Video + Audio' in f['type'] or 
+                      'Merged' in f['type'] or 
+                      'Audio only' in f['type'] or
+                      'Best quality' in f['resolution'] or
+                      'FFmpeg' in f.get('type', '')]
+            
+            # Sort formats - prioritize 1080p, then other formats, move Best quality to bottom
             formats = sorted(formats, 
                             key=lambda x: (
-                                0 if x['resolution'] in ['Best quality', 'Best up to 1080p', 'Best up to 720p'] else
+                                # Prioritize 1080p formats
+                                9 if x['resolution'] == '1080p' or '1080p (Merged)' in x['resolution'] else
+                                # Put Best quality at the bottom
+                                0 if x['resolution'] == 'Best quality' else
+                                # Regular sorting for other formats
                                 1 if x['type'] == 'Video + Audio' else
-                                2 if x['type'] == 'Video only' else 3,
+                                2 if 'Merged' in x['type'] and 'Best up to' not in x['resolution'] else
+                                3 if 'Audio only' in x['type'] else
+                                4 if 'Best up to' in x['resolution'] else 5,
                                 # Try to parse resolution as number for sorting
                                 int(x['resolution'].replace('p', '')) if x['resolution'].replace('p', '').isdigit() else 0
                             ), 
                             reverse=True)
+            
+            # Add 'recommended' flag to 1080p formats
+            for format in formats:
+                if format['resolution'] == '1080p' or '1080p (Merged)' in format['resolution']:
+                    format['recommended'] = True
             
             return formats, info.get('title', 'Untitled Video')
     except Exception as e:
@@ -163,7 +201,7 @@ def download():
     format_id = request.form['format_id']
     video_title = request.form['video_title']
     
-    # Check cache for recent downloads with thread safety
+    # Check cache for recent downloads
     cache_key = f"{youtube_url}_{format_id}"
     current_time = datetime.now()
     
@@ -180,40 +218,54 @@ def download():
     
     user_agent = get_random_user_agent()
     
+    # FIX: Improved format selection logic
+    format_selection = format_id
+    is_custom_merge = False
+    
+    # For preset formats, refine the format selection to ensure proper quality
+    if 'bestvideo[height<=1080]+bestaudio' in format_id:
+        # Force 1080p or highest available below that
+        format_selection = 'bestvideo[height<=1080][height>=720]+bestaudio/best[height<=1080]'
+    elif 'bestvideo[height<=720]+bestaudio' in format_id:
+        # Force 720p or highest available below that
+        format_selection = 'bestvideo[height<=720][height>=480]+bestaudio/best[height<=720]'
+    elif 'bestvideo+bestaudio' in format_id:
+        # Ensure we get the best quality with proper merging
+        format_selection = 'bestvideo+bestaudio/best'
+    # Handle custom video+audio merges created from video-only formats
+    elif '+' in format_id and '(Merged)' in request.form.get('resolution', ''):
+        # This is a custom format that needs to be merged with FFmpeg
+        video_format, audio_format = format_id.split('+')
+        format_selection = f"{video_format}+{audio_format}"
+        is_custom_merge = True
+        
     ydl_opts = {
-        'format': format_id,
+        'format': format_selection,
         'outtmpl': output_path,
         'noplaylist': True,
         'quiet': False,
-        'no_warnings': False,
-        'postprocessors': [{
-            'key': 'FFmpegMetadata',
-            'add_metadata': True,
-        }],
+        # Always use FFmpeg for merging to ensure audio is included when available
+        'postprocessors': [
+            {
+                'key': 'FFmpegMetadata',
+                'add_metadata': True,
+            },
+            # Add FFmpeg video remuxer to ensure proper merging
+            {
+                'key': 'FFmpegVideoRemuxer',
+                'preferedformat': 'mp4',
+            }
+        ],
+        # Ensure FFmpeg is used for merging separate audio and video
+        'merge_output_format': 'mp4',
         'user_agent': user_agent,
         'http_headers': {
             'User-Agent': user_agent,
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
-            'Referer': 'https://www.youtube.com/',
-            'X-Forwarded-For': f"192.168.{random.randint(1, 254)}.{random.randint(1, 254)}"
+            'Referer': 'https://www.youtube.com/'
         },
-        'nocheckcertificate': True,
-        'ignoreerrors': False,
-        'logtostderr': True,  # Log to stderr for debugging
-        'geo_bypass': True,
-        'geo_bypass_country': 'US',
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'web'],  # Try both clients
-                'compat_opts': ['no-youtube-unavailable-videos']
-            }
-        },
-        'socket_timeout': 30,
-        'retries': 10,  # Increase retry attempts
-        'retry_sleep_functions': {'http': lambda x: 5 + x * 2},  # Progressive backoff
-        'max_sleep_interval': 15,
-        'force_ipv4': True
+        'retries': 5
     }
     
     # Add a proxy if configured
@@ -233,11 +285,11 @@ def download():
                         downloaded_file = possible_file
                         break
             
-            # Update cache with thread safety
+            # Update cache
             with cache_lock:
                 download_cache[cache_key] = (downloaded_file, current_time)
+                
                 # Clean old cache entries
-                current_time = datetime.now()
                 expired_keys = [k for k, v in download_cache.items()
                                if (current_time - v[1]).total_seconds() > CACHE_DURATION]
                 for k in expired_keys:
@@ -245,6 +297,7 @@ def download():
             
             response = send_file(downloaded_file, as_attachment=True, download_name=os.path.basename(downloaded_file))
             
+            # Schedule file cleanup
             def delayed_delete():
                 time.sleep(120)  # 2 minutes delay
                 try:
@@ -267,7 +320,6 @@ def download():
             error_message = "YouTube has detected this as automated activity. Try a different format or video, or try using a proxy."
         return render_template('index.html', error=error_message)
 
-# Add a route to check if Railway environment variables are available
 @app.route('/check_env', methods=['GET'])
 def check_env():
     is_railway = os.environ.get('RAILWAY_STATIC_URL') is not None or os.environ.get('RAILWAY_SERVICE_ID') is not None
@@ -275,8 +327,7 @@ def check_env():
     env_info = {
         "running_on_railway": is_railway,
         "proxy_configured": proxy_configured,
-        "download_folder_exists": os.path.exists(DOWNLOAD_FOLDER),
-        "python_version": os.environ.get('PYTHON_VERSION', 'Unknown')
+        "download_folder_exists": os.path.exists(DOWNLOAD_FOLDER)
     }
     return str(env_info)
 

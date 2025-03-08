@@ -126,6 +126,29 @@
             font-size: 0.8rem;
             color: #888;
         }
+        /* Loading spinner styles */
+        .spinner {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            vertical-align: text-bottom;
+            border: 0.2em solid currentColor;
+            border-right-color: transparent;
+            border-radius: 50%;
+            animation: spinner-border .75s linear infinite;
+            margin-right: 0.5rem;
+            display: none;
+        }
+        @keyframes spinner-border {
+            to { transform: rotate(360deg); }
+        }
+        .btn-download.loading .spinner {
+            display: inline-block;
+        }
+        .btn-download.loading {
+            pointer-events: none;
+            opacity: 0.85;
+        }
     </style>
 </head>
 <body>
@@ -143,19 +166,15 @@
         <div class="row row-cols-1 row-cols-md-3 g-3 mb-4">
             {% for format in formats %}
             <div class="col">
-                <div class="format-card position-relative {% if loop.first %}border-primary{% endif %}">
-                    {% if loop.first %}
+                <div class="format-card position-relative">
+                    {% if format.recommended is defined and format.recommended %}
                     <div class="recommended">Recommended</div>
                     {% endif %}
                     <div class="format-title">{{ format.resolution }}</div>
                     <div class="format-info">
                         <div class="format-type mb-1">
-                            <span class="format-badge {% if 'audio' in format.type|lower and 'video' not in format.type|lower %}badge-audio{% else %}badge-video{% endif %}">
-                                {% if 'audio' in format.type|lower and 'video' not in format.type|lower %}
-                                    Audio only
-                                {% else %}
-                                    Audio + Video
-                                {% endif %}
+                            <span class="format-badge {% if 'Audio only' in format.type %}badge-audio{% else %}badge-video{% endif %}">
+                                {{ format.type }}
                             </span>
                         </div>
                         {{ format.ext }} {% if format.fps and format.fps != '?' %} • {{ format.fps }} FPS{% endif %}
@@ -166,11 +185,14 @@
                         Size calculated on download
                         {% endif %}
                     </div>
-                    <form method="POST" action="{{ url_for('download') }}">
+                    <form method="POST" action="{{ url_for('download') }}" class="download-form">
                         <input type="hidden" name="youtube_url" value="{{ youtube_url }}">
                         <input type="hidden" name="format_id" value="{{ format.format_id }}">
                         <input type="hidden" name="video_title" value="{{ video_title }}">
-                        <button type="submit" class="btn btn-download w-100">Download</button>
+                        <button type="submit" class="btn btn-download w-100">
+                            <span class="spinner"></span>
+                            <span class="btn-text">Download</span>
+                        </button>
                     </form>
                 </div>
             </div>
@@ -185,5 +207,21 @@
             Yet Another YouTube Video Downloader
         </div>
     </div>
+    
+    <script>
+        // Add event listeners to all download forms
+        document.addEventListener('DOMContentLoaded', function() {
+            const downloadForms = document.querySelectorAll('.download-form');
+            
+            downloadForms.forEach(form => {
+                form.addEventListener('submit', function() {
+                    // Find the button within this form and add loading class
+                    const button = this.querySelector('.btn-download');
+                    button.classList.add('loading');
+                    button.querySelector('.btn-text').textContent = 'Downloading...';
+                });
+            });
+        });
+    </script>
 </body>
 </html>

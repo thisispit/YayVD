@@ -63,6 +63,29 @@
             font-size: 0.8rem;
             color: #888;
         }
+        /* Loading spinner styles */
+        .spinner {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            vertical-align: text-bottom;
+            border: 0.2em solid currentColor;
+            border-right-color: transparent;
+            border-radius: 50%;
+            animation: spinner-border .75s linear infinite;
+            margin-right: 0.5rem;
+            display: none;
+        }
+        @keyframes spinner-border {
+            to { transform: rotate(360deg); }
+        }
+        .btn-download.loading .spinner {
+            display: inline-block;
+        }
+        .btn-download.loading {
+            pointer-events: none;
+            opacity: 0.85;
+        }
     </style>
 </head>
 <body>
@@ -77,13 +100,16 @@
         </div>
         {% endif %}
         
-        <form method="POST" action="{{ url_for('index') }}">
+        <form method="POST" action="{{ url_for('index') }}" id="download-form">
             <div class="mb-4">
                 <input type="text" class="form-control" id="youtube_url" name="youtube_url" 
                     placeholder="Paste YouTube URL here..." required>
             </div>
             <div class="d-grid">
-                <button type="submit" class="btn btn-download">Get Download Options</button>
+                <button type="submit" class="btn btn-download" id="submit-btn">
+                    <span class="spinner"></span>
+                    <span class="btn-text">Get Download Options</span>
+                </button>
             </div>
         </form>
         
@@ -91,5 +117,18 @@
             Yet Another YouTube Video Downloader
         </div>
     </div>
+
+    <script>
+        // Add loading indicator when form is submitted
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('download-form');
+            const button = document.getElementById('submit-btn');
+            
+            form.addEventListener('submit', function() {
+                button.classList.add('loading');
+                button.querySelector('.btn-text').textContent = 'Fetching options...';
+            });
+        });
+    </script>
 </body>
 </html>
