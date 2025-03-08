@@ -46,7 +46,6 @@ def get_available_formats(url):
         'writeinfojson': False,
         'format': 'bestvideo+bestaudio/best',
         'user_agent': user_agent,
-        'cookiesfrombrowser': ('chrome',),
         'http_headers': {
             'User-Agent': user_agent,
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -266,7 +265,6 @@ def download():
         # Ensure FFmpeg is used for merging separate audio and video
         'merge_output_format': 'mp4',
         'user_agent': user_agent,
-        'cookiesfrombrowser': ('chrome',),
         'http_headers': {
             'User-Agent': user_agent,
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
